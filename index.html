@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Layer Grabber – view an ArcGIS layer and download SHP / KML / KMZ</title>
+<title>Layer Grabber By Dwiti – view an ArcGIS layer and download SHP / KML / KMZ</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <style>
 :root{
@@ -36,6 +36,7 @@ button{cursor:pointer}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn.primary:hover{background:var(--accent-d)}
 .btn:disabled{opacity:.55;cursor:not-allowed}
+#findBtn{color:gray}
 .top .btn.ghost{background:transparent;border-color:#38505f;color:#d4e0e5}
 .top .btn.ghost:hover{background:#1f3341}
 #busy{height:3px;background:transparent;position:relative;overflow:hidden}
@@ -57,6 +58,26 @@ button{cursor:pointer}
 .tool select{border:1px solid var(--line);border-radius:4px;padding:5px 6px;background:#fff;max-width:170px}
 .tool input[type=text]{border:1px solid var(--line);border-radius:4px;padding:5px 7px;background:#fff;width:186px}
 .tool.proxy-on select{background:var(--accent-l);border-color:var(--accent)}
+.geo-wrap{position:relative}
+.geo-wrap input{background:#0f1c26;border:1px solid #2b3f4d;color:#fff;border-radius:6px;padding:8px 10px;width:260px;font-size:13px}
+.geo-wrap input::placeholder{color:#8aa0ab}
+.geo-wrap input:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+#geoResults{position:fixed;background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 10px 28px rgba(0,0,0,.25);z-index:5000;max-height:280px;overflow:auto}
+#geoResults .gi{padding:8px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f0f0;color:var(--ink)}
+#geoResults .gi:last-child{border-bottom:none}
+#geoResults .gi:hover,#geoResults .gi.sel{background:var(--accent-l)}
+#geoResults .gi b{font-weight:600}
+#geoResults .gi small{display:block;color:var(--ink-2);margin-top:1px}
+#geoResults .gi.hint{cursor:default;color:var(--ink-2)}
+.find-results{display:grid;gap:8px;max-height:min(50vh,420px);overflow:auto}
+.find-item{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:6px;padding:9px 10px}
+.find-item img{width:44px;height:44px;object-fit:cover;border-radius:4px;background:#eee;flex:none}
+.find-item .fi-body{flex:1;min-width:0}
+.find-item .fi-title{font-weight:600;font-size:13.5px}
+.find-item .fi-meta{font-size:12px;color:var(--ink-2);margin-top:1px}
+.find-item .fi-meta span{margin-right:8px}
+.find-item .fi-snippet{font-size:12.5px;color:var(--ink-2);margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.find-item button{flex:none;align-self:center}
 .only-narrow{display:none}
 
 /* ---------- workspace ---------- */
@@ -88,18 +109,140 @@ button{cursor:pointer}
 .hint{font-size:12px;color:var(--muted)}
 
 #mapwrap{flex:1;min-width:0;display:flex;flex-direction:column}
+#svPane{flex:none;width:45%;min-width:280px;max-width:80%;display:flex;flex-direction:column;background:#111;border-left:3px solid var(--accent,#0f766e);position:relative}
+#svPane[hidden]{display:none}
+#svHead{display:flex;align-items:center;gap:10px;padding:6px 10px;background:#1c2321;color:#e7efec;font-size:13px;font-weight:600}
+#svHead .sp{flex:1}
+#svHead a{color:#7dd3c8;font-weight:500;text-decoration:none;font-size:12.5px}
+#svHead a:hover{text-decoration:underline}
+#svHead .icon-btn{color:#e7efec}
+#svBody{flex:1;min-height:0;position:relative}
+#svFrame,#svFrame2{position:absolute;inset:0;width:100%;height:100%;border:0}
+#svWait{position:absolute;right:10px;bottom:10px;z-index:6;background:rgba(20,34,45,.78);color:#fff;font-size:12px;padding:4px 10px;border-radius:12px;pointer-events:none}
+#svMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#cbd5d1;font-size:14px;line-height:1.5;z-index:3;background:#111}
+#svMsg[hidden]{display:none}
+#svGrip{position:absolute;left:-7px;top:0;bottom:0;width:11px;cursor:col-resize;z-index:1200}
+#svTouch{position:absolute;inset:0;z-index:5;cursor:grab;touch-action:none;pointer-events:none;display:none}
+#svTouch.on{pointer-events:auto;display:block}
+#svCtl{background:#2b3633;color:#e7efec;border:1px solid #4a5a56;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer}
+#svCtl.on{background:#7dd3c8;color:#10201d}
+#svTouch.drag{cursor:grabbing}
+#svTouch .ring{position:absolute;width:46px;height:20px;margin:-10px 0 0 -23px;border:3px solid rgba(255,255,255,.95);border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,.6);pointer-events:none;animation:svring .5s ease-out forwards}
+@keyframes svring{from{transform:scale(.4);opacity:1}to{transform:scale(1.5);opacity:0}}
+#svRot{position:absolute;left:12px;top:12px;z-index:7;display:flex;gap:6px}
+#svRot button{width:36px;height:36px;border-radius:50%;border:0;background:rgba(255,255,255,.92);box-shadow:0 1px 4px rgba(0,0,0,.45);font-size:19px;line-height:1;color:#333}
+#svRot button:hover{background:#fff}
+.sv-marker{background:none;border:0}
+.sv-marker{cursor:grab}.sv-marker.leaflet-drag-target{cursor:grabbing}
+.sv-marker div{width:64px;height:64px;transition:transform .08s linear}
+#svKey{width:150px;border:1px solid var(--line);border-radius:5px;padding:4px 6px;font-size:11.5px}
+@media (max-width:900px){#svPane{position:absolute;left:0;right:0;bottom:0;width:auto !important;max-width:none;height:55%;z-index:1300;border-left:0;border-top:3px solid var(--accent,#0f766e)}#svGrip{display:none}}
 #map{flex:1;min-height:0;background:#dfe6e3}
-#map.drawing canvas{pointer-events:none !important}
-#dock{height:230px;flex:none;background:var(--panel);border-top:2px solid var(--accent);display:flex;flex-direction:column}
-#dock-head{display:flex;align-items:center;gap:10px;padding:6px 12px;background:#f0f3f1;border-bottom:1px solid var(--line);font-weight:600;font-size:13px}
+#map.drawing canvas,#map.tracing canvas,#map.handdraw canvas{pointer-events:none !important}
+#map.tracing{touch-action:none}
+.tool:disabled{opacity:.4;cursor:not-allowed}
+.tool:disabled:hover{background:transparent;border-color:transparent}
+.vh{width:12px;height:12px;margin:-6px 0 0 -6px;box-sizing:border-box;border:2px solid #2563eb;background:#fff;border-radius:50%;cursor:move}
+.vm{width:9px;height:9px;margin:-4px 0 0 -4px;box-sizing:border-box;border:2px solid #2563eb;background:rgba(37,99,235,.35);border-radius:50%;cursor:copy}
+.attr-form{display:block}
+.attr-coord{font-size:15px;font-weight:600;margin:2px 0 8px;user-select:all}
+table.attr-tbl{width:100%;border-collapse:collapse;table-layout:fixed;border:1.5px solid #1f2937}
+table.attr-tbl td{border:1px solid #1f2937;padding:0;height:34px;vertical-align:middle}
+table.attr-tbl td.an{width:38%;padding:0 10px;font-size:14px;background:#f8faf9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.attr-tbl td.an small{color:var(--muted);font-size:10.5px;margin-left:4px}
+table.attr-tbl td.av input{width:100%;height:100%;box-sizing:border-box;border:0;border-radius:0;padding:0 10px;font-size:14px;background:#fff;outline:none}
+table.attr-tbl td.av input:focus{box-shadow:inset 0 0 0 2px var(--accent,#0f766e)}
+table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
+.fld input:disabled{background:#f0f3f1;color:var(--muted)}
+.fld input[type=password]{border:1px solid var(--line);border-radius:5px;padding:7px 9px}
+.lm-row{display:grid;grid-template-columns:1fr 130px 34px;gap:8px;margin-bottom:6px}
+.lm-row input,.lm-row select{border:1px solid var(--line);border-radius:5px;padding:6px 8px;background:#fff;width:100%}
+
+/* ---------- attribute table (ArcGIS Pro look) ---------- */
+.cell-edit{width:100%;min-width:60px;box-sizing:border-box;border:1px solid #2b7fb8;padding:1px 4px;font:inherit;background:#fff;outline:none}
+#dock{position:relative;height:260px;flex:none;background:var(--panel);border-top:2px solid var(--accent);display:flex;flex-direction:column}
+#dock-head{display:flex;align-items:center;gap:10px;padding:5px 12px;background:#e9edeb;border-bottom:1px solid var(--line);font-weight:600;font-size:13px}
 #dock-head span{font-weight:400;color:var(--muted)}
 #dock-head .sp{flex:1}
-#tableBody{flex:1;overflow:auto}
-#tableBody table{border-collapse:collapse;font-size:12.5px;min-width:100%}
-#tableBody th{position:sticky;top:0;background:#e6ebe8;text-align:left;padding:5px 10px;border-bottom:1px solid var(--line);white-space:nowrap;font-weight:600}
-#tableBody td{padding:4px 10px;border-bottom:1px solid #edf0ee;white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis}
-#tableBody tbody tr{cursor:pointer}
-#tableBody tbody tr:hover{background:var(--accent-l)}
+#tableBody{flex:1;overflow:auto;min-height:0}
+#dockGrip{position:absolute;left:0;right:0;top:-4px;height:7px;cursor:row-resize;z-index:5}
+#tblBar{display:flex;align-items:center;gap:4px;padding:4px 8px;background:#f3f3f3;border-bottom:1px solid #cfcfcf;flex-wrap:wrap}
+#tblBar button{border:1px solid transparent;background:transparent;padding:3px 9px;font-size:12px;border-radius:2px;color:#222}
+#tblBar button:hover:not(:disabled){background:#dfeef8;border-color:#a9cbe2}
+#tblBar button:disabled{opacity:.4;cursor:not-allowed}
+#tblBar .vsep{width:1px;height:20px;background:#cfcfcf;margin:0 4px}
+#tblBar .segm{display:inline-flex;border:1px solid #b5b5b5;border-radius:2px;overflow:hidden}
+#tblBar .segm button{border:0;border-radius:0;background:#fff}
+#tblBar .segm button.on{background:#cde8f8;font-weight:600}
+#tblBar input{border:1px solid #b5b5b5;border-radius:2px;padding:3px 7px;font-size:12px;width:170px;background:#fff}
+#tableBody{background:#fff}
+#tableBody table.gt{border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12px;font-family:"Segoe UI",system-ui,sans-serif}
+#tableBody .gt th{position:sticky;top:0;z-index:2;background:#ececec;color:#222;text-align:left;padding:0 18px 0 8px;height:26px;border-right:1px solid #c9c9c9;border-bottom:1px solid #a9a9a9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;cursor:pointer;user-select:none}
+#tableBody .gt th:hover{background:#dfeaf2}
+#tableBody .gt th.corner{background:#e2e2e2;cursor:default;padding:0}
+#tableBody .gt th .sort{position:absolute;right:8px;top:7px;font-size:8px;color:#2b6a97}
+#tableBody .gt th .rs{position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize}
+#tableBody .gt th .rs:hover{background:#7fb6dc}
+#tableBody .gt td{height:24px;padding:0 8px;border-right:1px solid #e1e1e1;border-bottom:1px solid #e1e1e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:none}
+#tableBody .gt td.rsel{background:#e8e8e8;border-right:1px solid #c9c9c9;padding:0;cursor:pointer}
+#tableBody .gt td.ro{color:#6b6b6b;background:#f7f7f7}
+#tableBody .gt tbody tr{cursor:default}
+#tableBody .gt tbody tr:hover td:not(.rsel){background:#eaf4fb}
+#tableBody .gt tbody tr.selrow td{background:#9fdcf7;border-bottom-color:#7cc4e6}
+#tableBody .gt tbody tr.selrow td.rsel{background:#4aaee0}
+#tableBody .gt tbody tr.selrow td.ro{background:#b5e3f8}
+#tblFoot{display:flex;align-items:center;gap:18px;padding:3px 10px;background:#f3f3f3;border-top:1px solid #cfcfcf;font-size:12px;color:#333}
+#tblFoot .sp{flex:1}
+#tblFoot b{font-weight:600}
+
+/* ---------- right-hand attributes pane ---------- */
+#attrPane{flex:none;width:330px;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;position:relative}
+#attrPane.collapsed{width:34px}
+#apHead{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#f0f3f1;border-bottom:1px solid var(--line);font-size:14px}
+#apHead b{font-weight:650}
+#apCount{background:#4aaee0;color:#fff;border-radius:10px;padding:0 8px;font-size:12px;font-weight:600}
+#apCount:empty{display:none}
+#apCollapse{border:0;background:transparent;font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;color:var(--muted)}
+#apCollapse:hover{background:#dfe6e2}
+#apRail{display:none;writing-mode:vertical-rl;padding:14px 0;font-weight:600;color:var(--ink-2);align-self:center;letter-spacing:.3px}
+#attrPane.collapsed #apBody,#attrPane.collapsed #apHead b,#attrPane.collapsed #apCount{display:none}
+#attrPane.collapsed #apHead{justify-content:center;padding:9px 0}
+#attrPane.collapsed #apRail{display:block}
+#apBody{flex:1;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.ap-empty{color:var(--muted);line-height:1.55;text-align:center;padding:26px 10px}
+.ap-empty svg{width:42px;height:42px;stroke:#9fb2ab;fill:none;stroke-width:1.4;margin-bottom:6px}
+.ap-empty .btn{margin-top:10px}
+.ap-layer{display:flex;align-items:center;gap:8px}
+.ap-layer b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ap-layer small{color:var(--muted);font-size:11.5px;white-space:nowrap}
+.ap-tools{display:flex;gap:6px;flex-wrap:wrap}
+.ap-tools .btn{padding:4px 10px;font-size:12.5px}
+.ap-sec-h{font-size:12px;font-weight:650;color:var(--ink-2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;display:flex;gap:6px;align-items:baseline}
+.ap-sec-h span{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)}
+.ap-list{border:1px solid #cfd6d2;border-radius:3px;max-height:190px;overflow:auto;background:#fff}
+.ap-row{display:flex;align-items:center;gap:8px;padding:5px 9px;cursor:pointer;border-bottom:1px solid #eef1ef;font-size:13px;border-left:3px solid transparent}
+.ap-row:last-child{border-bottom:0}
+.ap-row:hover{background:#eaf4fb}
+.ap-row.on{background:#cfeefc;border-left-color:#2b9fd8;font-weight:600}
+.ap-row svg{width:14px;height:14px;flex:none;color:#2b6a97}
+.ap-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ap-row.more{cursor:default;color:var(--muted);font-style:italic}
+.ap-grid{width:100%;border-collapse:collapse;table-layout:fixed;border:1px solid #b9c2be;font-size:13px}
+.ap-grid th{width:42%;text-align:left;font-weight:500;background:#f2f4f3;padding:5px 8px;border:1px solid #d3d9d6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+.ap-grid td{border:1px solid #d3d9d6;padding:0;vertical-align:middle;background:#fff}
+.ap-grid td.v{padding:5px 8px;word-break:break-word}
+.ap-grid td a{color:#1d6fa5}
+.ap-grid input{width:100%;border:0;padding:6px 8px;font-size:13px;background:#fff;outline:none;height:28px}
+.ap-grid input:focus{box-shadow:inset 0 0 0 2px #2b9fd8}
+.ap-grid input:disabled{background:#f0f2f1;color:var(--muted)}
+.ap-grid input::placeholder{color:#7a8a92;font-style:italic}
+.ap-grid .mixed{color:#7a8a92;font-style:italic}
+.ap-note{font-size:12px;color:var(--muted);line-height:1.45}
+.ap-loc{font-size:12.5px;color:var(--ink-2);user-select:all}
+@media (max-width:860px){
+  #attrPane{position:absolute;right:0;top:0;bottom:0;z-index:1250;width:min(330px,90vw);box-shadow:-4px 0 20px rgba(0,0,0,.2)}
+  #attrPane.collapsed{width:34px;box-shadow:none}
+}
 
 .status{display:flex;gap:18px;align-items:center;background:#e4e9e6;border-top:1px solid var(--line);padding:4px 12px;font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden}
 .status .msg{flex:1;overflow:hidden;text-overflow:ellipsis}
@@ -111,6 +254,18 @@ button{cursor:pointer}
 .pop-scroll th{text-align:left;font-weight:500;color:var(--muted);padding:2px 10px 2px 0;vertical-align:top;white-space:nowrap}
 .pop-scroll td{padding:2px 0;word-break:break-word}
 .nil{color:#9aa8b0}
+
+/* password gate */
+#gate{position:fixed;inset:0;background:linear-gradient(135deg,var(--ink),var(--ink-2));display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}
+#gate .box{background:var(--panel);border-radius:10px;width:min(360px,100%);padding:26px 26px 22px;box-shadow:0 20px 60px rgba(0,0,0,.4);text-align:center}
+#gate h1{margin:0 0 4px;font-size:17px;color:var(--ink)}
+#gate p{margin:0 0 18px;font-size:12.5px;color:var(--muted)}
+#gate input{width:100%;border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:14px;text-align:center;letter-spacing:1px}
+#gate input:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+#gate button{margin-top:12px;width:100%;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:6px;padding:10px 12px;font-weight:600;font-size:14px}
+#gate button:hover{background:var(--accent-d)}
+#gate .err{color:var(--err);font-size:12.5px;margin-top:10px;min-height:16px}
+#app.locked{display:none}
 
 /* modal + toast */
 .overlay{position:fixed;inset:0;background:rgba(15,28,38,.55);display:flex;align-items:center;justify-content:center;z-index:3000;padding:14px}
@@ -152,6 +307,7 @@ button{cursor:pointer}
   .top{flex-wrap:wrap;gap:8px}
   .urlbar{flex-basis:100%;order:3;flex-wrap:wrap}
   #tokenInput{width:100%}
+  .geo-wrap,.geo-wrap input{width:100%}
   .only-narrow{display:flex}
   #contents{position:absolute;z-index:1200;top:0;bottom:0;left:0;width:min(330px,88vw);transform:translateX(-101%);transition:transform .2s;box-shadow:4px 0 20px rgba(0,0,0,.25)}
   #contents.open{transform:none}
@@ -161,18 +317,66 @@ button{cursor:pointer}
 </style>
 </head>
 <body>
-<div id="app">
+<div id="gate">
+  <div class="box">
+    <h1>Layer Grabber By Dwiti</h1>
+    <p>This tool is password protected. Enter the password to continue.</p>
+    <input type="password" id="gatePw" placeholder="Password" autocomplete="off">
+    <button type="button" id="gateBtn">Unlock</button>
+    <div class="err" id="gateErr"></div>
+  </div>
+</div>
+<script>
+(function(){
+  var PASSWORD_B64 = "U3BnJGRrbUAzMjM3";
+  var PASSWORD = atob(PASSWORD_B64);
+  var SESSION_KEY = "lg_unlocked";
+  var gate = document.getElementById('gate');
+  var pw = document.getElementById('gatePw');
+  var btn = document.getElementById('gateBtn');
+  var err = document.getElementById('gateErr');
+
+  function tryUnlock(){
+    if (pw.value === PASSWORD) {
+      try { sessionStorage.setItem(SESSION_KEY, "1"); } catch(e) {}
+      gate.hidden = true;
+      document.getElementById('app').classList.remove('locked');
+      if (window.dispatchEvent) window.dispatchEvent(new Event('resize'));
+    } else {
+      err.textContent = "Incorrect password. Try again.";
+      pw.value = "";
+      pw.focus();
+    }
+  }
+  var already = false;
+  try { already = sessionStorage.getItem(SESSION_KEY) === "1"; } catch(e) {}
+  if (already) {
+    gate.hidden = true;
+    document.getElementById('app').classList.remove('locked');
+  } else {
+    setTimeout(function(){ pw.focus(); }, 30);
+  }
+  btn.addEventListener('click', tryUnlock);
+  pw.addEventListener('keydown', function(e){ if (e.key === 'Enter') tryUnlock(); });
+})();
+</script>
+<div id="app" class="locked">
   <header class="top">
     <div class="brand">
       <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M3 21 9 5l9 4 7-5-2 18-11 3Z" fill="none" stroke="#5eead4" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 5l2 19M18 9l5 13" stroke="#5eead4" stroke-width="1" opacity=".6"/></svg>
-      <div><b>Layer Grabber</b><br><span>View an ArcGIS layer, then download it</span></div>
+      <div><b>Layer Grabber By Dwiti</b><br><span>View an ArcGIS layer, then download it</span></div>
     </div>
     <div class="urlbar">
       <input id="urlInput" type="text" spellcheck="false" autocomplete="off" aria-label="ArcGIS layer URL"
              placeholder="Paste an ArcGIS FeatureServer or MapServer layer URL"
              value="https://gis.cookcountyil.gov/hosting/rest/services/Hosted/Parcel2021_enhancedAll/FeatureServer/0">
       <input id="tokenInput" type="password" autocomplete="off" aria-label="Access token" placeholder="Token (private layers only)">
+      <button class="btn" id="findBtn">Find layer…</button>
       <button class="btn primary" id="addBtn">Add to map</button>
+    </div>
+    <div class="geo-wrap">
+      <input id="geoQ" type="text" spellcheck="false" autocomplete="off" aria-label="Search a place, address or coordinates"
+             placeholder="🔍 Address, city, state, country, or lat, lon…">
     </div>
     <button class="btn ghost" id="helpBtn">Help</button>
   </header>
@@ -188,6 +392,38 @@ button{cursor:pointer}
       <button class="tool" id="btnDraw" data-icon="box">Draw box</button>
       <button class="tool" id="btnClearBox" data-icon="clear">Clear box</button>
     </div><div class="grp-cap">Select area</div></div>
+    <div class="grp"><div class="grp-btns">
+      <button class="tool" id="btnTrace" data-icon="trace" title="Press and drag to draw a box. Every parcel inside or touching the box is selected.">Trace box</button>
+      <button class="tool" id="btnTraceClear" data-icon="clear">Clear trace</button>
+      <button class="tool dl" id="btnTraceDl" data-icon="down">Download traced</button>
+    </div><div class="grp-cap" id="traceCap">Trace parcels</div></div>
+    <div class="grp"><div class="grp-btns">
+      <button class="tool" id="btnNewLayer" data-icon="newlayer" title="Create an editable layer: choose polygon, line or point and set its attribute fields">New layer</button>
+      <button class="tool" id="btnFields" data-icon="fields" title="Add, rename or delete the attribute fields of the active editable layer">Edit fields</button>
+      <button class="tool dl" id="btnHandDl" data-icon="down">Download drawn</button>
+      <button class="tool" id="btnHandClear" data-icon="clear" title="Delete every feature on the active editable layer">Clear layer</button>
+    </div><div class="grp-cap">Editable layer</div></div>
+    <div class="grp"><div class="grp-btns">
+      <button class="tool" id="btnDrawPoly" data-tool="polygon" data-icon="poly" title="Click each corner; double-click or Enter to finish">Polygon</button>
+      <button class="tool" id="btnDrawLine" data-tool="line" data-icon="line" title="Click each vertex; double-click or Enter to finish">Line</button>
+      <button class="tool" id="btnDrawPoint" data-tool="point" data-icon="point" title="Click to drop a point">Point</button>
+      <label class="tool" style="flex-direction:row;gap:5px;cursor:pointer;font-size:11.5px;line-height:1.2"><input type="checkbox" id="autoAttr">Ask for fields<br>after drawing</label>
+    </div><div class="grp-cap">Draw</div></div>
+    <div class="grp"><div class="grp-btns">
+      <button class="tool on" id="btnPan" data-icon="pan" title="Back to normal panning and popups">Pan</button>
+      <button class="tool" id="btnSelect" data-tool="select" data-icon="cursor" title="Click a feature (Shift adds), or drag a box around several">Select</button>
+      <button class="tool" id="btnSelAll" data-icon="all">Select all</button>
+      <button class="tool" id="btnSelClear" data-icon="clear">Deselect</button>
+      <button class="tool" id="btnMove" data-tool="move" data-icon="move" title="Drag a feature (or the whole selection) to a new place">Move</button>
+      <button class="tool" id="btnVertex" data-tool="vertex" data-icon="vertex" title="Click a feature, then drag its dots to reshape it">Vertices</button>
+      <button class="tool" id="btnAttr" data-icon="edit" title="Fill in the attribute fields of the selected features">Attributes</button>
+      <button class="tool" id="btnDel" data-icon="trash" title="Delete the selected features (Delete key)">Delete</button>
+      <button class="tool" id="btnUndo" data-icon="undo" title="Undo (Ctrl+Z)">Undo</button>
+      <button class="tool" id="btnRedo" data-icon="redo" title="Redo (Ctrl+Y)">Redo</button>
+    </div><div class="grp-cap" id="editCap">Select &amp; edit</div></div>
+    <div class="grp"><div class="grp-btns">
+      <button class="tool" id="btnStreet" data-icon="street" title="Press, then click a road on the map. The screen splits and Google Street View opens on the right.">Street View</button>
+    </div><div class="grp-cap">Street View</div></div>
     <div class="grp"><div class="grp-btns">
       <button class="tool dl" data-export="shp" data-icon="down">Shapefile</button>
       <button class="tool dl" data-export="kml" data-icon="down">KML</button>
@@ -216,10 +452,32 @@ button{cursor:pointer}
     <main id="mapwrap">
       <div id="map"></div>
       <section id="dock">
+        <div id="dockGrip" title="Drag to resize"></div>
         <div id="dock-head"><div id="dockTitle">Attribute table</div><span id="dockSub"></span><div class="sp"></div><button class="icon-btn" id="dockClose" title="Hide table">✕</button></div>
+        <div id="tblBar">
+          <div class="segm"><button id="tShowAll" class="on">All</button><button id="tShowSel">Selected (0)</button></div>
+          <span class="vsep"></span>
+          <button id="tSelAll" title="Select every row (matching the filter)">Select all</button>
+          <button id="tSwitch" title="Select the rows that are not selected">Switch</button>
+          <button id="tClear" title="Clear selection">Clear</button>
+          <button id="tZoom" title="Zoom the map to the selected rows">Zoom to</button>
+          <button id="tDel" title="Delete the selected rows (editable layers)">Delete</button>
+          <span class="vsep"></span>
+          <input id="tFilter" type="text" placeholder="Filter rows…" spellcheck="false" autocomplete="off">
+        </div>
         <div id="tableBody"></div>
+        <div id="tblFoot"><span><b id="tblCount">0 of 0</b> Selected</span><span id="tblNote"></span><span class="sp"></span><span id="tblHint"></span></div>
       </section>
     </main>
+    <aside id="attrPane" aria-label="Attributes">
+      <div id="apHead"><b>Attributes</b><span id="apCount"></span><span id="apRail">Attributes</span><span class="sp"></span><button id="apCollapse" title="Hide / show the Attributes pane" aria-label="Toggle Attributes pane">›</button></div>
+      <div id="apBody"></div>
+    </aside>
+    <aside id="svPane" hidden>
+      <div id="svGrip" title="Drag to resize"></div>
+      <div id="svHead"><span id="svTitle">Street View</span><span class="sp"></span><button id="svCtl" title="OFF: use Google's own arrows and drag inside the view. ON: map-synced drag/click walking (blue dot follows).">Map-sync: OFF</button><a id="svOpen" href="#" target="_blank" rel="noopener">Open in Google Maps ↗</a><button class="icon-btn" id="svClose" title="Close Street View" aria-label="Close Street View">✕</button></div>
+      <div id="svBody"><iframe id="svFrame" hidden allowfullscreen referrerpolicy="no-referrer-when-downgrade" title="Google Street View"></iframe><iframe id="svFrame2" hidden allowfullscreen referrerpolicy="no-referrer-when-downgrade" title="Google Street View"></iframe><div id="svTouch" title="Drag to turn · click to walk forward (bottom strip = back) · hold to keep walking · scroll to move"></div><div id="svWait" hidden>Updating view…</div><div id="svMsg" hidden></div></div>
+    </aside>
   </div>
 
   <footer class="status">
@@ -247,6 +505,8 @@ button{cursor:pointer}
       <div class="fld"><span class="lbl">Area to download</span>
         <div class="seg three" id="exArea">
           <label><input type="radio" name="area" value="view" checked><span><b>Current map view</b><i>Everything inside the map window right now</i></span></label>
+          <label><input type="radio" name="area" value="trace" id="areaTrace" disabled><span><b>Traced parcels</b><i id="areaTraceNote">Use “Trace box” on the ribbon first</i></span></label>
+          <label><input type="radio" name="area" value="picked" id="areaPicked" disabled><span><b>Selected features</b><i id="areaPickedNote">Select features with the Select tool first</i></span></label>
           <label><input type="radio" name="area" value="box" id="areaBox" disabled><span><b>Drawn box</b><i id="areaBoxNote">Use “Draw box” on the ribbon first</i></span></label>
           <label><input type="radio" name="area" value="all"><span><b>Entire layer</b><i>Every feature (tick “Download every matching feature” below to remove the size limit)</i></span></label>
         </div>
@@ -278,21 +538,87 @@ button{cursor:pointer}
   </div>
 </div>
 
+<!-- Find a layer dialog -->
+<div class="overlay" id="findModal" hidden>
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="findTitle">
+    <div class="modal-head"><h2 id="findTitle">Find a layer on ArcGIS Online</h2><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="modal-body">
+      <label class="fld"><span class="lbl">Search public layers (e.g. “parcels Nodaway County”)</span>
+        <input id="findQ" type="text" spellcheck="false" autocomplete="off" placeholder="Type a place or topic and pause…"></label>
+      <div class="find-results" id="findResults"><p class="hint">Search results appear here. Only public Feature and Map layers are shown — private or Esri-only layers won’t work with this tool.</p></div>
+    </div>
+    <div class="modal-foot"><span class="sp"></span><button class="btn" data-close>Close</button></div>
+  </div>
+</div>
+
 <!-- Help dialog -->
 <div class="overlay" id="helpModal" hidden>
   <div class="modal help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
     <div class="modal-head"><h2 id="helpTitle">How to use</h2><button class="x" data-close aria-label="Close">×</button></div>
     <div class="modal-body">
       <ol>
-        <li>Paste the layer address (it ends in <code>/FeatureServer/0</code> or <code>/MapServer/3</code>) and press <b>Add to map</b>. A service address without a number adds all of its layers.</li>
-        <li>Big layers such as county parcels only draw once you zoom in (the minimum zoom is shown on the layer card). Zoom in, then click any shape to see its attributes.</li>
+        <li>Paste the layer address (it ends in <code>/FeatureServer/0</code> or <code>/MapServer/3</code>) and press <b>Add to map</b>. A service address without a number adds all of its layers — useful for a service that bundles, say, parcel polygons and parcel points together. You don't have to hunt down the raw address either: pasting an ArcGIS <b>app link</b> (a Map Viewer “Add layer from URL” link, a Field Maps/Experience Builder/StoryMaps link, anything with <code>?url=…</code> in it) or a <b>portal item page</b> link (<code>arcgis.com/home/item.html?id=…</code>) works too — the tool finds the real service address inside it automatically. Don't have any address? Press <b>Find layer…</b> next to the bar to search ArcGIS Online by place or topic (e.g. “parcels Nodaway County”) and add a result with one click — only public Feature/Map layers are shown, since that's the only kind this tool can read.</li>
+        <li>Use <b>Go to place</b> on the ribbon to jump the map to any address, city, state, or country — or paste raw coordinates like <code>41.85, -87.65</code> (lat, lon) to jump straight there. Powered by OpenStreetMap's free search, so results are place names and addresses, not parcel data.</li>
+        <li>Big layers such as county parcels only draw once you zoom in (the minimum zoom is shown on the layer card). Zoom in, then click any shape: its attributes appear in the Attributes pane on the right (Shift/Ctrl-click to select several).</li>
         <li>Use <b>Definition query</b> on the layer card to filter, for example <code>municipality = 'OAK PARK'</code>. The <b>Attribute table</b> lists what is loaded in the current view.</li>
         <li>Press <b>Shapefile</b>, <b>KML</b>, <b>KMZ</b> or <b>GeoJSON</b>. Choose the map view, a box you drew, or the entire layer, then press <b>Download</b>. Tick “Download every matching feature” to remove the size limit entirely and fetch everything that matches, however many features that is — for a county-wide parcel layer this can be a large file and take a while, since ArcGIS servers only return a few thousand features per request.</li>
+        <li><b>Trace box:</b> with a layer showing, press <b>Trace box</b> on the ribbon, then press and drag a box around the parcels you want (zoom in until they draw). Every parcel inside or touching the box turns orange. A single click selects one parcel. Draw again to add more; <b>Clear trace</b> resets. Press <b>Download traced</b> (or any download button and pick “Traced parcels”) to save exactly those parcels as SHP / KML / KMZ / GeoJSON. The <b>Basemap</b> list now includes Google Roadmap, Satellite, Hybrid and Terrain.</li>
+        <li><b>Editable layers (draw your own parcels, lines and points):</b> press <b>New layer</b> to choose Polygon, Line or Point and set its attribute fields, or just pick a tool in <b>Draw</b> and a layer is created for you. Polygon/Line: click each corner, then double-click (or press Enter) to finish; corners snap to nearby ones. Point: click once. Tick “Ask for fields after drawing” to fill in the attributes straight away.</li>
+        <li><b>Select &amp; edit:</b> <b>Select</b> clicks a feature (Shift adds) or drags a box; <b>Move</b> drags features; <b>Vertices</b> lets you drag a feature’s dots, drag a pale middle dot to add a corner, and right-click a dot to delete it; <b>Attributes</b> jumps to the Attributes pane on the right, which edits one feature or all selected features at once (pick “All N features” in its list; fields showing ‹multiple values› differ, and only fields you change are updated); <b>Delete</b>, <b>Undo</b> (Ctrl+Z) and <b>Redo</b> (Ctrl+Y) work as you’d expect. In the attribute table, click a row to select it and double-click a cell to edit it. <b>Edit fields</b> adds, renames or removes attribute fields. Area, length and coordinates are filled in automatically.</li>
+        <li><b>Rename a layer</b> with the Rename button on its card in Contents (or double-click its name). Hand-drawn layers are auto-saved in this browser and come back when you reopen the page; use <b>Download drawn</b> (all features, or just the selected ones) to keep a real file.</li>
+        <li><b>Street View:</b> press <b>Street View</b> on the ribbon, then click a road on the map. The screen splits and Google Street View opens on the right, with a Google-style blue dot and view cone on the map showing where you are and which way you face. Drag that dot along the road to move Street View with it (it snaps to the nearest road), or click elsewhere to jump, drag the grey bar between the two halves to resize, and press ✕ to close. Paste a Google Maps API key (Maps JavaScript API) into the ribbon box for the full interactive view where the marker follows you as you move along the road; without a key a basic embedded view is used. The key is kept only in this browser.</li>
         <li>Shapefiles come as a .zip. Unzip it before opening in ArcGIS or QGIS. Shapefile field names are cut to 10 characters, so a <code>_field_names.txt</code> file lists the original names.</li>
         <li>Some servers (for example <code>gis.cookcountyil.gov/traditional/…</code>) refuse browser requests because they send no CORS header, even though the address opens fine in a tab. Leave <b>Connection</b> on <b>Auto</b> and the layer is retried through a public proxy; a notice appears when that happens. Public proxies are rate limited, so for a big download use your own proxy address in the box next to it, with <code>{url}</code> where the target address goes.</li>
       </ol>
       <p class="hint">Everything runs in your browser. Nothing is uploaded anywhere except the requests sent to the ArcGIS server you entered.</p>
     </div>
+  </div>
+</div>
+
+<!-- Attribute form -->
+<div class="overlay" id="attrModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="attrTitle">
+    <div class="modal-head"><h2 id="attrTitle">Attributes</h2><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="modal-body">
+      <div class="hint" id="attrInfo"></div>
+      <div class="attr-form" id="attrForm"></div>
+      <label class="chk"><input type="checkbox" id="attrAll"><span id="attrAllLbl">Also apply my changes to every feature in this layer</span></label>
+    </div>
+    <div class="modal-foot"><span class="sp"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="attrSave">Save</button></div>
+  </div>
+</div>
+
+<!-- New layer / edit fields -->
+<div class="overlay" id="layerModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="lmTitle">
+    <div class="modal-head"><h2 id="lmTitle">New editable layer</h2><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="modal-body">
+      <div id="lmTop" class="modal-body" style="padding:0">
+        <label class="fld"><span class="lbl">Layer name</span><input type="text" id="lmName" placeholder="e.g. Lot boundaries" autocomplete="off"></label>
+        <div class="fld"><span class="lbl">Feature type</span>
+          <div class="seg" id="lmType" style="grid-template-columns:repeat(3,1fr)">
+            <label><input type="radio" name="lmtype" value="polygon" checked><span><b>Polygon</b><i>Parcels, areas</i></span></label>
+            <label><input type="radio" name="lmtype" value="line"><span><b>Line</b><i>Roads, pipes</i></span></label>
+            <label><input type="radio" name="lmtype" value="point"><span><b>Point</b><i>Poles, wells</i></span></label>
+          </div>
+        </div>
+      </div>
+      <div class="fld"><span class="lbl">Attribute fields</span>
+        <div id="lmFields"></div>
+        <div><button class="btn" type="button" id="lmAdd">+ Add field</button></div>
+        <div class="hint" id="lmAuto"></div>
+      </div>
+    </div>
+    <div class="modal-foot"><span class="sp"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="lmOk">OK</button></div>
+  </div>
+</div>
+
+<!-- Rename layer -->
+<div class="overlay" id="renameModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rnTitle" style="width:min(420px,100%)">
+    <div class="modal-head"><h2 id="rnTitle">Rename layer</h2><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="modal-body"><label class="fld"><span class="lbl">Layer name</span><input type="text" id="rnInput" autocomplete="off"></label></div>
+    <div class="modal-foot"><span class="sp"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="rnSave">Rename</button></div>
   </div>
 </div>
 
@@ -697,7 +1023,7 @@ const GGCore = (function () {
   }
   function proxyUrl(px, full) { return px.tpl.replace('{url}', px.raw ? full : encodeURIComponent(full)); }
   const layers = [];
-  let seq = 0, activeId = null, drawMode = false, boxStart = null, boxLayer = null, busyCount = 0;
+  let seq = 0, activeId = null, drawMode = false, traceMode = false, svMode = false, tracing = null, traceLine = null, hand = false, handPts = [], handPrev = null, manualLayer = null, manualSeq = 0, boxStart = null, boxLayer = null, busyCount = 0;
   let exportAbort = null, exportRunning = false;
 
   /* ---------- small UI helpers ---------- */
@@ -707,7 +1033,23 @@ const GGCore = (function () {
     box: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" stroke-dasharray="3 2.5"/></svg>',
     clear: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     down: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>',
-    layers: '<svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5M3 17.5l9 5 9-5"/></svg>'
+    layers: '<svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5M3 17.5l9 5 9-5"/></svg>',
+    line: '<svg viewBox="0 0 24 24"><path d="M4 19 10 9l5 6 5-11"/><circle cx="4" cy="19" r="1.5"/><circle cx="20" cy="4" r="1.5"/></svg>',
+    point: '<svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z"/><circle cx="12" cy="11" r="2"/></svg>',
+    pan: '<svg viewBox="0 0 24 24"><path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6.5a1.5 1.5 0 0 1 3 0V15c0 4-2 6-5 6s-4-1.5-6-5l-1.5-3a1.5 1.5 0 0 1 2.5-1.5L8 14"/></svg>',
+    cursor: '<svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2 4 7-3 1.5-4-7-5 4z"/></svg>',
+    all: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M8 12l3 3 5-6"/></svg>',
+    move: '<svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg>',
+    vertex: '<svg viewBox="0 0 24 24"><path d="M5 17 9 7l8 3 2 8z"/><rect x="3.5" y="15.5" width="3" height="3"/><rect x="7.5" y="5.5" width="3" height="3"/><rect x="15.5" y="8.5" width="3" height="3"/><rect x="17.5" y="16.5" width="3" height="3"/></svg>',
+    edit: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
+    trash: '<svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg>',
+    redo: '<svg viewBox="0 0 24 24"><path d="M15 4l5 5-5 5M20 9H10a6 6 0 0 0 0 12"/></svg>',
+    newlayer: '<svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5zM3 13l9 5 5-2.8"/><path d="M18 14v7M14.5 17.5h7"/></svg>',
+    fields: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M9 4v16M13 14h5M13 17h3"/></svg>',
+    poly: '<svg viewBox="0 0 24 24"><path d="M5 6l9-2 5 8-4 8-9-3z"/><circle cx="5" cy="6" r="1.4"/><circle cx="14" cy="4" r="1.4"/><circle cx="19" cy="12" r="1.4"/><circle cx="15" cy="20" r="1.4"/><circle cx="6" cy="17" r="1.4"/></svg>',
+    undo: '<svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5M4 12h10a6 6 0 0 1 0 12" transform="translate(0 -3)"/></svg>',
+    street: '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.4"/><path d="M12 8v6M8 10l4 1 4-1M12 14l-3 7M12 14l3 7"/></svg>',
+    trace: '<svg viewBox="0 0 24 24"><path d="M4 18c3-8 6 2 9-5s4-5 7-9"/><circle cx="4" cy="18" r="1.6"/></svg>'
   };
   $$('[data-icon]').forEach(b => { b.insertAdjacentHTML('afterbegin', ICONS[b.dataset.icon] || ''); });
 
@@ -797,6 +1139,40 @@ const GGCore = (function () {
     return u.split('#')[0].split('?')[0].trim().replace(/\/+$/, '').replace(/\/query$/i, '');
   }
 
+  /* Many links people copy are not the REST service address itself, but a link to an
+     ArcGIS *app* that has the service address buried inside it (Map Viewer's "Add layer
+     from URL" produces links like arcgis.com/apps/mapviewer/index.html?url=<service>,
+     and Field Maps / Experience Builder / StoryMaps do similar things), or a portal
+     "item" page (arcgis.com/home/item.html?id=<32-char id>). Unwrap both cases so the
+     tool can be pointed at the app link people actually have in hand. */
+  const isServiceUrl = u => /\/rest\/services\/.+\/(MapServer|FeatureServer|ImageServer)(\/\d+)?\/?($|[?#])/i.test(u || '');
+  function findEmbeddedServiceUrl(raw) {
+    if (isServiceUrl(raw)) return null; // already a direct service link – nothing to unwrap
+    try {
+      const u = new URL(raw);
+      for (const key of ['url', 'layer', 'serviceUrl', 'dataUrl', 'itemUrl']) {
+        const v = u.searchParams.get(key);
+        if (v && isServiceUrl(v)) return v;
+      }
+      for (const [, v] of u.searchParams) { if (isServiceUrl(v)) return v; }
+      if (u.hash) {
+        const hm = /[?&]url=([^&]+)/i.exec(u.hash);
+        if (hm) { const dec = decodeURIComponent(hm[1]); if (isServiceUrl(dec)) return dec; }
+      }
+    } catch (e) { /* not a valid URL on its own – ignore */ }
+    return null;
+  }
+  async function resolveArcgisItemUrl(raw) {
+    const m = /(?:[?&#/]id=|\/items\/)([0-9a-f]{32})\b/i.exec(raw);
+    if (!m) return null;
+    try {
+      const item = await arcRequest('https://www.arcgis.com/sharing/rest/content/items/' + m[1], { f: 'json' }, null);
+      if (item && item.url && isServiceUrl(item.url)) return item.url;
+      if (item && item.url) return item.url; // let arcRequest below report the real problem
+    } catch (e) { /* not a resolvable portal item – fall through to the normal error */ }
+    return null;
+  }
+
   /* ---------- map ---------- */
   const map = L.map('map', { preferCanvas: true, center: [41.84, -87.68], zoom: 10, maxZoom: 21, zoomControl: true });
   L.control.scale({ imperial: true, metric: true, position: 'bottomleft' }).addTo(map);
@@ -810,6 +1186,10 @@ const GGCore = (function () {
     'Esri Topographic': () => esriTile('World_Topo_Map'),
     'Light gray canvas': () => esriTile('Canvas/World_Light_Gray_Base', 16),
     'Dark gray canvas': () => esriTile('Canvas/World_Dark_Gray_Base', 16),
+    'Google Roadmap': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 21, attribution: 'Map data © Google' }),
+    'Google Satellite': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 21, attribution: 'Imagery © Google' }),
+    'Google Hybrid': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 21, attribution: 'Map data © Google' }),
+    'Google Terrain': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 21, attribution: 'Map data © Google' }),
     'OpenStreetMap': () => L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, maxZoom: 21, attribution: '© OpenStreetMap contributors' })
   };
   let baseLayer = null;
@@ -842,6 +1222,9 @@ const GGCore = (function () {
 
   /* ---------- draw box ---------- */
   function setDrawMode(on) {
+    if (on && traceMode) setTraceMode(false);
+    if (on && hand) setHandMode(false);
+    if (on && svMode) setSvMode(false);
     drawMode = on;
     $('#btnDraw').classList.toggle('on', on);
     $('#map').classList.toggle('drawing', on);
@@ -864,6 +1247,887 @@ const GGCore = (function () {
     setMsg('Box drawn. Choose a download format and select “Drawn box”.');
     toast('Box drawn. Press Shapefile, KML or KMZ and choose “Drawn box”.');
   });
+
+  /* ---------- trace box: select parcels by drawing a box on the map ---------- */
+  const selLayer = L.geoJSON(null, {
+    style: { color: '#ea580c', weight: 3, fillColor: '#fb923c', fillOpacity: 0.45, opacity: 1, interactive: false },
+    pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 7, color: '#ea580c', weight: 3, fillColor: '#fb923c', fillOpacity: 0.6, interactive: false })
+  }).addTo(map);
+  function featKey(lyr, f) {
+    const p = f.properties || {};
+    if (p[lyr.oid] !== undefined && p[lyr.oid] !== null) return String(p[lyr.oid]);
+    if (f.id !== undefined && f.id !== null) return String(f.id);
+    return 'g' + JSON.stringify(f.geometry).length + '_' + JSON.stringify(f.geometry).slice(0, 80);
+  }
+  function selTotal() { return layers.reduce((n, l) => n + (l.manual ? 0 : l.sel.size), 0); }
+  function renderSel() {
+    selLayer.clearLayers();
+    layers.forEach(l => { if (!l.manual && l.visible && l.sel.size) selLayer.addData(Array.from(l.sel.values())); });
+    selLayer.bringToFront();
+    const n = selTotal();
+    $('#traceCap').textContent = n ? 'Traced: ' + nf(n) : 'Trace parcels';
+    $('#btnTraceDl').disabled = !n; $('#btnTraceClear').disabled = !n;
+  }
+  function setTraceMode(on) {
+    if (on && drawMode) setDrawMode(false);
+    if (on && hand) setHandMode(false);
+    if (on && svMode) setSvMode(false);
+    traceMode = on;
+    $('#btnTrace').classList.toggle('on', on);
+    $('#map').classList.toggle('tracing', on);
+    map.getContainer().style.cursor = on ? 'crosshair' : '';
+    if (on) map.dragging.disable(); else map.dragging.enable();
+    if (!on && traceLine) { map.removeLayer(traceLine); traceLine = null; tracing = null; }
+    if (on) {
+      const l = activeLayer();
+      setMsg(l ? 'Trace box: press and drag a box around the parcels you want on “' + l.name + '”. Release to select every parcel in the box; draw again to add more.' : 'Add a layer first, then use Trace box.');
+    }
+  }
+  $('#btnTrace').addEventListener('click', () => {
+    if (!layers.length) { toast('Add a layer to the map first.', 'warn'); return; }
+    const l = activeLayer();
+    if (!traceMode && l && map.getZoom() < l.minZoom) toast('Zoom in to level ' + l.minZoom + ' or closer so the parcels are visible, then draw a box around them.', 'warn');
+    setTraceMode(!traceMode);
+  });
+  $('#btnTraceClear').addEventListener('click', () => { layers.forEach(l => { if (!l.manual) l.sel.clear(); }); renderSel(); setMsg('Trace cleared.'); });
+  $('#btnTraceDl').addEventListener('click', () => {
+    const l = layers.find(x => !x.manual && x.sel.size && x.id === activeId) || layers.find(x => !x.manual && x.sel.size);
+    if (!l) { toast('Nothing traced yet. Use Trace box first.', 'warn'); return; }
+    openExport('shp', l.id);
+  });
+  (function wireTraceDrag() {
+    const c = map.getContainer();
+    c.addEventListener('pointerdown', e => {
+      if (!traceMode || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      if (e.target.closest('.leaflet-control')) return;
+      e.preventDefault();
+      try { c.setPointerCapture(e.pointerId); } catch (err) {}
+      const ll = map.mouseEventToLatLng(e);
+      tracing = { start: ll, cur: ll, sp: map.latLngToContainerPoint(ll), id: e.pointerId };
+      if (traceLine) map.removeLayer(traceLine);
+      traceLine = L.rectangle([ll, ll], { color: '#ea580c', weight: 2, dashArray: '6 4', fillColor: '#fb923c', fillOpacity: 0.12, interactive: false }).addTo(map);
+    });
+    c.addEventListener('pointermove', e => {
+      if (!tracing || e.pointerId !== tracing.id) return;
+      const ll = map.mouseEventToLatLng(e);
+      tracing.cur = ll; traceLine.setBounds(L.latLngBounds(tracing.start, ll));
+    });
+    const end = e => {
+      if (!tracing || e.pointerId !== tracing.id) return;
+      const t = tracing; tracing = null;
+      try { c.releasePointerCapture(e.pointerId); } catch (err) {}
+      if (traceLine) { map.removeLayer(traceLine); traceLine = null; }
+      if (e.type === 'pointercancel') return;
+      const tiny = map.latLngToContainerPoint(t.cur).distanceTo(t.sp) < 5;
+      runTrace(tiny ? { point: t.start } : { box: L.latLngBounds(t.start, t.cur) });
+    };
+    c.addEventListener('pointerup', end);
+    c.addEventListener('pointercancel', end);
+  })();
+  async function runTrace(sel) {
+    const lyr = activeLayer();
+    if (!lyr) { toast('Add a layer first.', 'warn'); return; }
+    if (!lyr.visible) { toast('Switch the layer on (tick its box in Contents) before tracing.', 'warn'); return; }
+    if (map.getZoom() < lyr.minZoom) { toast('Zoom in to level ' + lyr.minZoom + ' or closer, then trace.', 'warn'); return; }
+    const base = { where: lyr.where || '1=1', inSR: 4326, spatialRel: 'esriSpatialRelIntersects', outFields: '*', returnGeometry: true, outSR: 4326 };
+    if (sel.point) { base.geometry = sel.point.lng + ',' + sel.point.lat; base.geometryType = 'esriGeometryPoint'; }
+    else {
+      const b = sel.box;
+      base.geometry = [clampLng(b.getWest()), clampLat(b.getSouth()), clampLng(b.getEast()), clampLat(b.getNorth())].join(',');
+      base.geometryType = 'esriGeometryEnvelope';
+    }
+    busy(1); setMsg('Tracing…');
+    try {
+      let all = [], offset = 0, exceeded = false;
+      for (;;) {
+        const params = Object.assign({}, base, { resultRecordCount: lyr.maxRec });
+        if (lyr.paging) params.resultOffset = offset;
+        const res = await queryFeatures(lyr, params, null);
+        all = all.concat(res.features);
+        exceeded = res.exceeded;
+        if (!lyr.paging || !res.exceeded || !res.features.length || all.length >= 20000) break;
+        offset += res.features.length;
+      }
+      let added = 0, removed = 0;
+      all.forEach(f => {
+        if (!f.geometry) return;
+        const k = featKey(lyr, f);
+        if (!lyr.sel.has(k)) { lyr.sel.set(k, f); added++; }
+      });
+      renderSel();
+      const n = lyr.sel.size;
+      if (!all.length) toast('No parcels found in that box. Check the layer is switched on, then draw the box over the parcels.', 'warn');
+      else toast(nf(added) + ' new parcel' + (added === 1 ? '' : 's') + ' traced (' + nf(n) + ' total on “' + lyr.name + '”).' + (exceeded && !lyr.paging ? ' The server cut the result at its limit; draw a smaller box to get the rest.' : ''), exceeded && !lyr.paging ? 'warn' : '');
+      setMsg(nf(n) + ' traced parcel' + (n === 1 ? '' : 's') + '. Draw another box to add more, or press “Download traced”.');
+    } catch (e) { toast('Trace failed: ' + (e.message || e), 'err'); setMsg('Trace failed: ' + (e.message || e)); }
+    finally { busy(-1); }
+  }
+
+  /* ---------- editable layers: draw polygon/line/point, select, move, edit vertices, attributes ---------- */
+  let eTool = null, undoStack = [], redoStack = [], saveTimer = null, saveWarned = false;
+  const GT = { polygon: 'esriGeometryPolygon', line: 'esriGeometryPolyline', point: 'esriGeometryPoint' };
+  const GNAME = { polygon: 'Polygons', line: 'Lines', point: 'Points' };
+  const TYPE_LABEL = { esriFieldTypeString: 'Text', esriFieldTypeDouble: 'Number', esriFieldTypeInteger: 'Integer', esriFieldTypeOID: 'ID' };
+  const AUTO = {
+    polygon: [{ name: 'AREA_SQFT', alias: 'Area (sq ft)', type: 'esriFieldTypeDouble', auto: true }, { name: 'AREA_ACRES', alias: 'Area (acres)', type: 'esriFieldTypeDouble', auto: true }],
+    line: [{ name: 'LENGTH_FT', alias: 'Length (ft)', type: 'esriFieldTypeDouble', auto: true }, { name: 'LENGTH_MI', alias: 'Length (miles)', type: 'esriFieldTypeDouble', auto: true }],
+    point: [{ name: 'LON', alias: 'Longitude', type: 'esriFieldTypeDouble', auto: true }, { name: 'LAT', alias: 'Latitude', type: 'esriFieldTypeDouble', auto: true }]
+  };
+  const AUTO_HINT = { polygon: 'FID, AREA_SQFT and AREA_ACRES are added and kept up to date automatically.', line: 'FID, LENGTH_FT and LENGTH_MI are added and kept up to date automatically.', point: 'FID, LON and LAT are added and kept up to date automatically.' };
+  const pickLayer = L.geoJSON(null, {
+    style: { color: '#00c8ff', weight: 4, fillColor: '#4fdcff', fillOpacity: 0.4, opacity: 1, interactive: false },
+    pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 10, color: '#00c8ff', weight: 3, fillColor: '#4fdcff', fillOpacity: 0.6, interactive: false })
+  }).addTo(map);
+  const handleGroup = L.layerGroup().addTo(map);
+  handPrev = L.layerGroup().addTo(map);
+
+  /* ----- geometry helpers ----- */
+  function eachCoord(g, cb) {
+    if (!g) return;
+    if (g.type === 'Point') cb(g.coordinates);
+    else if (g.type === 'LineString') g.coordinates.forEach(cb);
+    else if (g.type === 'Polygon') g.coordinates.forEach(r => r.forEach(cb));
+  }
+  function ringAreaM2(ring) {
+    const lat0 = ring.reduce((a, c) => a + c[1], 0) / ring.length;
+    const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+    let a = 0;
+    for (let i = 0; i < ring.length - 1; i++) a += (ring[i][0] * kx) * (ring[i + 1][1] * ky) - (ring[i + 1][0] * kx) * (ring[i][1] * ky);
+    return Math.abs(a / 2);
+  }
+  function lineLenM(cs) { let m = 0; for (let i = 0; i < cs.length - 1; i++) m += L.latLng(cs[i][1], cs[i][0]).distanceTo(L.latLng(cs[i + 1][1], cs[i + 1][0])); return m; }
+  function updateAuto(lyr, f) {
+    const g = f.geometry, p = f.properties;
+    if (lyr.gtype === 'polygon') { const m2 = ringAreaM2(g.coordinates[0]); p.AREA_SQFT = Math.round(m2 * 10.7639); p.AREA_ACRES = Number((m2 / 4046.8564).toFixed(4)); }
+    else if (lyr.gtype === 'line') { const m = lineLenM(g.coordinates); p.LENGTH_FT = Math.round(m * 3.28084 * 10) / 10; p.LENGTH_MI = Number((m / 1609.344).toFixed(4)); }
+    else { p.LON = Number(g.coordinates[0].toFixed(7)); p.LAT = Number(g.coordinates[1].toFixed(7)); }
+  }
+  const toPt = c => map.latLngToContainerPoint([c[1], c[0]]);
+  function distSeg(p, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+    let t = l2 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0; t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  }
+  function pointInRing(p, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i].x, yi = ring[i].y, xj = ring[j].x, yj = ring[j].y;
+      if (((yi > p.y) !== (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+  }
+  function hitFeature(f, pt, tol) {
+    const g = f.geometry; if (!g) return false;
+    if (/^Multi/.test(g.type)) { const t = g.type.slice(5); return g.coordinates.some(c => hitFeature1({ geometry: { type: t, coordinates: c } }, pt, tol)); }
+    return hitFeature1(f, pt, tol);
+  }
+  function hitFeature1(f, pt, tol) {
+    const g = f.geometry;
+    if (g.type === 'Point') return toPt(g.coordinates).distanceTo(pt) <= tol + 3;
+    if (g.type === 'LineString') { const q = g.coordinates.map(toPt); for (let i = 0; i < q.length - 1; i++) if (distSeg(pt, q[i], q[i + 1]) <= tol) return true; return false; }
+    const rings = g.coordinates.map(r => r.map(toPt));
+    for (const r of rings) for (let i = 0; i < r.length - 1; i++) if (distSeg(pt, r[i], r[i + 1]) <= Math.min(tol, 5)) return true;
+    return pointInRing(pt, rings[0]) && !rings.slice(1).some(h => pointInRing(pt, h));
+  }
+  function hitTest(ll, tol) {
+    const pt = map.latLngToContainerPoint(ll);
+    for (let li = layers.length - 1; li >= 0; li--) {
+      const l = layers[li]; if (!l.visible) continue;
+      const pairs = layerPairs(l);
+      for (let i = pairs.length - 1; i >= 0; i--) if (hitFeature(pairs[i][1], pt, tol || 8)) return { lyr: l, key: pairs[i][0] };
+    }
+    return null;
+  }
+  function segInter(p1, p2, p3, p4) {
+    const o = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    return (o(p1, p2, p3) * o(p1, p2, p4) <= 0) && (o(p3, p4, p1) * o(p3, p4, p2) <= 0);
+  }
+  function pointInRingLL(pt, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+      if (((yi > pt[1]) !== (yj > pt[1])) && (pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return inside;
+  }
+  function featHitsBounds(f, b) {
+    const g = f.geometry; if (!g) return false;
+    if (/^Multi/.test(g.type)) { const t = g.type.slice(5); return g.coordinates.some(c => featHitsBounds1({ geometry: { type: t, coordinates: c } }, b)); }
+    return featHitsBounds1(f, b);
+  }
+  function featHitsBounds1(f, b) {
+    const g = f.geometry, inb = c => b.contains([c[1], c[0]]);
+    if (g.type === 'Point') return inb(g.coordinates);
+    const rings = g.type === 'LineString' ? [g.coordinates] : g.coordinates;
+    for (const r of rings) for (const c of r) if (inb(c)) return true;
+    const W = b.getWest(), E = b.getEast(), S = b.getSouth(), N = b.getNorth();
+    const edges = [[[W, S], [E, S]], [[E, S], [E, N]], [[E, N], [W, N]], [[W, N], [W, S]]];
+    for (const r of rings) for (let i = 0; i < r.length - 1; i++) for (const e of edges) if (segInter(r[i], r[i + 1], e[0], e[1])) return true;
+    return g.type === 'Polygon' ? pointInRingLL([(W + E) / 2, (S + N) / 2], g.coordinates[0]) : false;
+  }
+  function mkey(f) { return String(f.id != null ? f.id : (f.properties || {}).FID); }
+  var anonSeq = 0, lastFeatClick = 0;
+  function fkey(lyr, f) {
+    if (lyr.manual) return mkey(f);
+    let k = f.id; if (k == null) k = (f.properties || {})[lyr.oid]; if (k == null) k = (f.properties || {}).FID;
+    if (k == null) { if (!f.__k) f.__k = 'a' + (++anonSeq); k = f.__k; }
+    return String(k);
+  }
+  function layerPairs(lyr) {
+    if (lyr.manual) return Array.from(lyr.sel.entries());
+    return lyr.loaded.filter(f => f && f.geometry).map(f => [fkey(lyr, f), f]);
+  }
+  function featByKey(lyr, k) {
+    if (lyr.manual) return lyr.sel.get(k);
+    return (lyr.pcache && lyr.pcache.get(k)) || null;
+  }
+  function featClick(lyr, e) {
+    if (drawMode || traceMode || svMode || hand) return;
+    const f = e.layer && e.layer.feature; if (!f) return;
+    lastFeatClick = Date.now();
+    const oe = e.originalEvent || {}, add = oe.shiftKey || oe.ctrlKey || oe.metaKey;
+    pickFeatures(lyr, [fkey(lyr, f)], add ? 'toggle' : 'replace');
+  }
+  function zoomToPicked() {
+    const lyr = pickedLayer(); if (!lyr) return false;
+    const fs = Array.from(lyr.picked).map(k => featByKey(lyr, k)).filter(f => f && f.geometry);
+    if (!fs.length) return false;
+    const b = L.geoJSON(fs).getBounds(); if (!b.isValid()) return false;
+    if (b.getNorthEast().equals(b.getSouthWest())) map.setView(b.getCenter(), Math.max(map.getZoom(), 18));
+    else map.fitBounds(b, { maxZoom: 19, padding: [60, 60] });
+    return true;
+  }
+
+  /* ----- layers ----- */
+  function composeFields(lyr) {
+    return [{ name: 'FID', alias: 'FID', type: 'esriFieldTypeOID', auto: true }]
+      .concat(lyr.userFields.map(f => ({ name: f.name, alias: f.name, type: f.type })))
+      .concat(AUTO[lyr.gtype]);
+  }
+  function uniqueLayerName(base) { let n = base, i = 1; while (layers.some(l => l.name === n)) n = base + ' ' + (++i); return n; }
+  function createEditLayer(name, gtype, userFields, saved) {
+    const STY = { polygon: { line: '#2563eb', fill: '#3b82f6', fillOp: 0.25, weight: 2 }, line: { line: '#c2410c', fill: '#c2410c', fillOp: 0, weight: 3 }, point: { line: '#14532d', fill: '#16a34a', fillOp: 0.9, weight: 1.5 } };
+    const uf = (userFields || [{ name: 'NAME', type: 'esriFieldTypeString' }, { name: 'NOTES', type: 'esriFieldTypeString' }]).map(f => ({ name: f.name, alias: f.name, type: f.type }));
+    const lyr = {
+      id: ++seq, url: '', meta: {}, name: uniqueLayerName(name || GNAME[gtype]), visible: saved ? saved.visible !== false : true, open: false, manual: true,
+      gtype, geom: GT[gtype], userFields: uf, oid: 'FID', displayField: (uf.find(f => f.type === 'esriFieldTypeString') || {}).name || '',
+      maxRec: 1000, paging: false, orderBy: false, fmt: 'json', style: Object.assign({}, STY[gtype], saved && saved.style || {}), where: '', minZoom: 0,
+      loaded: [], sel: new Map(), picked: new Set(), nextId: 1, count: 0, note: 'Nothing drawn yet.', noteKind: '', reqId: 0, abort: null
+    };
+    lyr.fields = composeFields(lyr);
+    if (saved) {
+      lyr.nextId = saved.nextId || 1;
+      (saved.features || []).forEach(f => { if (f && f.geometry) lyr.sel.set(mkey(f), f); });
+      lyr.loaded = Array.from(lyr.sel.values()); lyr.count = lyr.sel.size;
+      lyr.note = lyr.sel.size ? nf(lyr.sel.size) + ' feature' + (lyr.sel.size === 1 ? '' : 's') + '.' : 'Nothing drawn yet.';
+    }
+    lyr.gj = L.geoJSON(null, {
+      style: () => styleFor(lyr),
+      pointToLayer: (f, ll) => L.circleMarker(ll, Object.assign({ radius: 6 }, styleFor(lyr), { fillOpacity: Math.max(0.6, lyr.style.fillOp) }))
+    });
+    lyr.gj.on('click', e => featClick(lyr, e));
+    if (lyr.loaded.length) lyr.gj.addData(lyr.loaded);
+    if (lyr.visible) lyr.gj.addTo(map);
+    layers.push(lyr);
+    if (!saved || !activeId) activeId = lyr.id;
+    renderContents(); renderTable(); renderPicks(); syncHandUi();
+    return lyr;
+  }
+  function editTargetLayer() { const a = activeLayer(); if (a && a.manual) return a; return layers.slice().reverse().find(l => l.manual) || null; }
+  function pickedLayer() { return layers.find(l => l.picked && l.picked.size) || null; }
+  function targetFor(gt) {
+    let l = activeLayer();
+    if (!(l && l.manual && l.gtype === gt)) {
+      l = layers.slice().reverse().find(x => x.manual && x.gtype === gt);
+      if (l) setActive(l.id);
+      else { l = createEditLayer(null, gt, null); toast('Created a new layer “' + l.name + '” for your ' + gt + 's. Rename it or change its fields any time.'); }
+    }
+    if (!l.visible) { l.visible = true; l.gj.addTo(map); renderContents(); }
+    return l;
+  }
+  function redrawLayer(lyr) {
+    lyr.loaded = Array.from(lyr.sel.values());
+    lyr.gj.clearLayers(); lyr.gj.addData(lyr.loaded);
+    renderPicks();
+  }
+  function syncManual(lyr) {
+    redrawLayer(lyr);
+    lyr.count = lyr.sel.size;
+    lyr.note = lyr.sel.size ? nf(lyr.sel.size) + ' feature' + (lyr.sel.size === 1 ? '' : 's') + '.' : 'Nothing drawn yet.';
+    renderContents(); syncHandUi(); buildHandles();
+    if (lyr.id === activeId) renderTable();
+    renderAttrPane(); updateTblBar();
+    scheduleSave();
+  }
+  function newFeature(lyr, g) {
+    const id = lyr.nextId++, p = { FID: id };
+    lyr.userFields.forEach(u => { p[u.name] = null; });
+    const f = { type: 'Feature', id, properties: p, geometry: g };
+    updateAuto(lyr, f); lyr.sel.set(String(id), f);
+    return f;
+  }
+  function coerce(fd, v) {
+    if (v === '' || v === null || v === undefined) return null;
+    if (fd.type === 'esriFieldTypeString') return String(v);
+    const n = Number(v); if (!isFinite(n)) return null;
+    return fd.type === 'esriFieldTypeInteger' ? Math.round(n) : n;
+  }
+  function setAttr(lyr, key, fd, v) {
+    const f = lyr.sel.get(key); if (!f) return;
+    pushUndo(lyr); f.properties[fd.name] = coerce(fd, v); syncManual(lyr);
+  }
+
+  /* ----- undo / redo / autosave ----- */
+  function snap(lyr) { return JSON.stringify({ e: Array.from(lyr.sel.entries()), n: lyr.nextId, u: lyr.userFields, p: Array.from(lyr.picked) }); }
+  function restoreSnap(lyr, s) {
+    const o = JSON.parse(s);
+    lyr.sel = new Map(o.e); lyr.nextId = o.n; lyr.userFields = o.u; lyr.fields = composeFields(lyr);
+    lyr.picked = new Set(o.p.filter(k => lyr.sel.has(k)));
+  }
+  function pushUndo(lyr) { undoStack.push({ id: lyr.id, s: snap(lyr) }); if (undoStack.length > 40) undoStack.shift(); redoStack = []; syncHandUi(); }
+  function stepHistory(from, to) {
+    let a = from.pop(); while (a && !byId(a.id)) a = from.pop();
+    if (!a) return;
+    const lyr = byId(a.id); to.push({ id: lyr.id, s: snap(lyr) });
+    restoreSnap(lyr, a.s); syncManual(lyr);
+  }
+  const undo = () => stepHistory(undoStack, redoStack);
+  const redo = () => stepHistory(redoStack, undoStack);
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveEdits, 500); }
+  function saveEdits() {
+    try {
+      const data = layers.filter(l => l.manual).map(l => ({ name: l.name, gtype: l.gtype, userFields: l.userFields, nextId: l.nextId, style: l.style, visible: l.visible, features: Array.from(l.sel.values()) }));
+      if (data.length) localStorage.setItem('lg_edit_layers_v1', JSON.stringify(data)); else localStorage.removeItem('lg_edit_layers_v1');
+    } catch (e) { if (!saveWarned) { saveWarned = true; toast('Your drawings could not be auto-saved in this browser (storage blocked or full). Use Download drawn to keep them.', 'warn'); } }
+  }
+  function loadEdits() {
+    try {
+      const raw = localStorage.getItem('lg_edit_layers_v1'); if (!raw) return;
+      const data = JSON.parse(raw); if (!Array.isArray(data) || !data.length) return;
+      data.forEach(d => createEditLayer(d.name, d.gtype, d.userFields, d));
+      toast('Restored ' + data.length + ' hand-drawn layer' + (data.length === 1 ? '' : 's') + ' saved in this browser.');
+    } catch (e) { /* ignore corrupt saves */ }
+  }
+
+  /* ----- selection ----- */
+  function renderPicks() {
+    pickLayer.clearLayers();
+    layers.forEach(l => { if (l.visible && l.picked && l.picked.size) pickLayer.addData(Array.from(l.picked).map(k => featByKey(l, k)).filter(f => f && f.geometry)); });
+    pickLayer.bringToFront();
+  }
+  function refreshTableSel() {
+    const lyr = activeLayer();
+    if (lyr && lyr.picked) {
+      if (tst(lyr).showSel) renderTable();
+      else $$('#tableBody tr[data-k]').forEach(tr => tr.classList.toggle('selrow', lyr.picked.has(tr.dataset.k)));
+    }
+    updateTblBar(); renderAttrPane();
+  }
+  function afterPick(lyr) {
+    layers.forEach(l => { if (!l.manual && l.pcache) l.pcache.forEach((f, k) => { if (!l.picked.has(k)) l.pcache.delete(k); }); });
+    if (lyr && lyr.id !== activeId) setActive(lyr.id);
+    renderPicks(); buildHandles(); syncHandUi(); refreshTableSel();
+  }
+  function pickFeatures(lyr, keys, mode) {
+    layers.forEach(l => { if (l !== lyr && l.picked) l.picked.clear(); });
+    if (mode === 'replace') lyr.picked.clear();
+    if (!lyr.manual) { const m = new Map(layerPairs(lyr)); keys.forEach(k => { const f = m.get(k) || lyr.pcache.get(k); if (f) lyr.pcache.set(k, f); }); keys = keys.filter(k => lyr.pcache.has(k)); }
+    keys.forEach(k => { if (mode === 'toggle' && lyr.picked.has(k)) lyr.picked.delete(k); else lyr.picked.add(k); });
+    afterPick(lyr);
+  }
+  function clearPicks() { layers.forEach(l => { if (l.picked) l.picked.clear(); }); renderPicks(); buildHandles(); syncHandUi(); refreshTableSel(); }
+  function deletePicked() {
+    const lyr = pickedLayer(); if (!lyr) return;
+    if (!lyr.manual) { toast('Features from a service layer are read-only, so they can’t be deleted. Only your own drawn layers can be edited.', 'warn'); return; }
+    const n = lyr.picked.size; pushUndo(lyr);
+    lyr.picked.forEach(k => lyr.sel.delete(k)); lyr.picked.clear();
+    syncManual(lyr); toast(n + ' feature' + (n === 1 ? '' : 's') + ' deleted. Press Undo to bring ' + (n === 1 ? 'it' : 'them') + ' back.');
+  }
+
+  /* ----- vertex handles ----- */
+  function vertexSets(f) {
+    const g = f.geometry;
+    if (g.type === 'Point') return [{ coords: [g.coordinates], closed: false, point: true }];
+    if (g.type === 'LineString') return [{ coords: g.coordinates, closed: false }];
+    return g.coordinates.map(r => ({ coords: r, closed: true }));
+  }
+  function setVertex(set, i, ll) {
+    const c = set.coords[i]; c[0] = Number(ll.lng.toFixed(8)); c[1] = Number(ll.lat.toFixed(8));
+    if (set.closed && i === 0) { const l = set.coords[set.coords.length - 1]; l[0] = c[0]; l[1] = c[1]; }
+  }
+  function deleteVertex(lyr, f, set, i) {
+    if (set.point || set.coords.length <= (set.closed ? 4 : 2)) { toast(set.closed ? 'A polygon needs at least 3 corners.' : 'A line needs at least 2 vertices.', 'warn'); return; }
+    pushUndo(lyr); set.coords.splice(i, 1);
+    if (set.closed && i === 0) set.coords[set.coords.length - 1] = set.coords[0].slice();
+    updateAuto(lyr, f); syncManual(lyr);
+  }
+  function buildHandles() {
+    handleGroup.clearLayers();
+    if (eTool !== 'vertex') return;
+    const lyr = pickedLayer(); if (!lyr || !lyr.manual || lyr.picked.size !== 1) return;
+    const f = lyr.sel.get(Array.from(lyr.picked)[0]); if (!f) return;
+    vertexSets(f).forEach(set => {
+      const n = set.closed ? set.coords.length - 1 : set.coords.length;
+      for (let i = 0; i < n; i++) {
+        const c = set.coords[i];
+        const m = L.marker([c[1], c[0]], { draggable: true, icon: L.divIcon({ className: 'vh', iconSize: [12, 12] }), keyboard: false, zIndexOffset: 1000 });
+        m.on('dragstart', () => pushUndo(lyr));
+        m.on('drag', ev => { setVertex(set, i, ev.target.getLatLng()); updateAuto(lyr, f); redrawLayer(lyr); });
+        m.on('dragend', () => syncManual(lyr));
+        m.on('contextmenu dblclick', ev => { L.DomEvent.stop(ev); deleteVertex(lyr, f, set, i); });
+        handleGroup.addLayer(m);
+      }
+      if (set.point) return;
+      const segs = set.closed ? n : n - 1;
+      for (let i = 0; i < segs; i++) {
+        const a = set.coords[i], b = set.coords[i + 1];
+        const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const m = L.marker([mid[1], mid[0]], { draggable: true, icon: L.divIcon({ className: 'vm', iconSize: [10, 10] }), keyboard: false, zIndexOffset: 900 });
+        let idx = -1;
+        m.on('dragstart', () => { pushUndo(lyr); idx = i + 1; set.coords.splice(idx, 0, mid.slice()); });
+        m.on('drag', ev => { setVertex(set, idx, ev.target.getLatLng()); updateAuto(lyr, f); redrawLayer(lyr); });
+        m.on('dragend', () => syncManual(lyr));
+        handleGroup.addLayer(m);
+      }
+    });
+  }
+
+  /* ----- tool switching ----- */
+  const TOOL_MSG = {
+    polygon: 'Draw polygon: click each corner. Finish by double-clicking, clicking the first corner, or pressing Enter. Backspace removes the last corner; Esc cancels.',
+    line: 'Draw line: click each vertex. Finish by double-clicking or pressing Enter. Backspace removes the last vertex; Esc cancels.',
+    point: 'Draw point: click the map to drop a point.',
+    select: 'Select: click a feature (Shift adds or removes) or drag a box around several. Delete removes them; Esc goes back to panning.',
+    move: 'Move: drag a feature to move it. If it is part of the selection, the whole selection moves.',
+    vertex: 'Vertices: click a feature, then drag its dots to reshape it. Drag a pale middle dot to add a corner; right-click or double-click a dot to delete it.'
+  };
+  function setEditTool(t) {
+    if (t) { if (traceMode) setTraceMode(false); if (drawMode) setDrawMode(false); if (svMode) setSvMode(false); }
+    eTool = t; hand = !!t; handPts = []; handPrev.clearLayers();
+    $$('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+    $('#btnPan').classList.toggle('on', !t);
+    $('#map').classList.toggle('handdraw', !!t);
+    map.getContainer().style.cursor = !t ? '' : (t === 'select' || t === 'move' || t === 'vertex') ? 'default' : 'crosshair';
+    if (t === 'select' || t === 'move') map.dragging.disable(); else map.dragging.enable();
+    if (t) map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
+    buildHandles(); syncHandUi();
+    if (t) setMsg(TOOL_MSG[t]);
+  }
+  function setHandMode(on) { if (!on) setEditTool(null); }
+  $$('[data-tool]').forEach(b => b.addEventListener('click', () => setEditTool(eTool === b.dataset.tool ? null : b.dataset.tool)));
+  $('#btnPan').addEventListener('click', () => setEditTool(null));
+
+  function syncHandUi() {
+    const am = editTargetLayer(), nfeat = am ? am.sel.size : 0, pl = pickedLayer(), np = pl ? pl.picked.size : 0;
+    $('#btnHandDl').disabled = !nfeat; $('#btnHandClear').disabled = !nfeat;
+    $('#btnFields').disabled = !am; $('#btnSelAll').disabled = !nfeat;
+    $('#btnAttr').disabled = !np; $('#btnDel').disabled = !np; $('#btnSelClear').disabled = !np;
+    $('#btnUndo').disabled = !undoStack.length && !handPts.length; $('#btnRedo').disabled = !redoStack.length;
+    $('#editCap').textContent = am ? am.name + ': ' + nfeat + (np ? ' · ' + np + ' selected' : '') : 'Select & edit';
+  }
+
+  /* ----- drawing ----- */
+  function snapPoint(ll) {
+    const pt = map.latLngToContainerPoint(ll); let best = null, bd = 9;
+    const test = c => { const d = toPt(c).distanceTo(pt); if (d < bd) { bd = d; best = L.latLng(c[1], c[0]); } };
+    if (handPts.length) test([handPts[0].lng, handPts[0].lat]);
+    layers.forEach(l => { if (l.manual && l.visible) l.sel.forEach(f => eachCoord(f.geometry, test)); });
+    return best || ll;
+  }
+  function drawPrev(cur) {
+    handPrev.clearLayers();
+    if (!handPts.length) return;
+    const pts = handPts.slice(); if (cur) pts.push(cur);
+    handPrev.addLayer(L.polyline(pts, { color: '#2563eb', weight: 2, dashArray: '5 4', interactive: false }));
+    handPts.forEach((p, i) => handPrev.addLayer(L.circleMarker(p, { radius: i === 0 ? 6 : 4, color: '#2563eb', weight: 2, fillColor: '#fff', fillOpacity: 1, interactive: false })));
+  }
+  function afterDraw(lyr, f) {
+    syncManual(lyr);
+    setMsg('Saved FID ' + f.properties.FID + ' on “' + lyr.name + '”. Keep drawing, or switch tools.');
+    if ($('#autoAttr').checked) { pickFeatures(lyr, [mkey(f)], 'replace'); openAttr(); }
+  }
+  function finishDraw() {
+    if (eTool !== 'polygon' && eTool !== 'line') return;
+    const need = eTool === 'polygon' ? 3 : 2;
+    if (handPts.length < need) { toast((eTool === 'polygon' ? 'A polygon needs at least 3 corners.' : 'A line needs at least 2 vertices.') + ' Keep clicking.', 'warn'); return; }
+    const lyr = targetFor(eTool); pushUndo(lyr);
+    const cs = handPts.map(p => [Number(p.lng.toFixed(8)), Number(p.lat.toFixed(8))]);
+    const g = eTool === 'polygon' ? { type: 'Polygon', coordinates: [cs.concat([cs[0].slice()])] } : { type: 'LineString', coordinates: cs };
+    const f = newFeature(lyr, g);
+    handPts = []; drawPrev(null); afterDraw(lyr, f);
+  }
+  function addPointAt(ll) {
+    const lyr = targetFor('point'); pushUndo(lyr);
+    afterDraw(lyr, newFeature(lyr, { type: 'Point', coordinates: [Number(ll.lng.toFixed(8)), Number(ll.lat.toFixed(8))] }));
+  }
+  map.on('click', e => {
+    if (!hand) return;
+    if (eTool === 'vertex') { const h = hitTest(e.latlng); if (h) pickFeatures(h.lyr, [h.key], 'replace'); else clearPicks(); return; }
+    if (eTool !== 'polygon' && eTool !== 'line' && eTool !== 'point') return;
+    const ll = snapPoint(e.latlng);
+    if (eTool === 'point') { addPointAt(ll); return; }
+    const p = map.latLngToContainerPoint(ll);
+    if (handPts.length) {
+      if (p.distanceTo(map.latLngToContainerPoint(handPts[handPts.length - 1])) < 3) return;
+      if (eTool === 'polygon' && handPts.length >= 3 && p.distanceTo(map.latLngToContainerPoint(handPts[0])) < 10) { finishDraw(); return; }
+    }
+    handPts.push(ll); drawPrev(e.latlng); syncHandUi();
+  });
+  map.on('dblclick', () => { if (hand && handPts.length) finishDraw(); });
+  map.on('mousemove', e => { if (hand && handPts.length) drawPrev(e.latlng); });
+
+  /* ----- select box / click select / move (pointer events so touch works too) ----- */
+  (function wireEditPointer() {
+    const c = map.getContainer(); let drag = null, raf = 0;
+    c.addEventListener('pointerdown', e => {
+      if ((eTool !== 'select' && eTool !== 'move') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      if (e.target.closest('.leaflet-control, .leaflet-popup')) return;
+      e.preventDefault();
+      try { c.setPointerCapture(e.pointerId); } catch (err) {}
+      const ll = map.mouseEventToLatLng(e), hit = hitTest(ll), add = e.shiftKey || e.ctrlKey || e.metaKey;
+      if (eTool === 'move' && hit && hit.lyr.manual) {
+        const l = hit.lyr;
+        if (!l.picked.has(hit.key)) pickFeatures(l, [hit.key], add ? 'add' : 'replace');
+        pushUndo(l);
+        drag = { mode: 'move', id: e.pointerId, start: ll, lyr: l, moved: false, orig: new Map(Array.from(l.picked).map(k => [k, JSON.stringify(l.sel.get(k).geometry)])) };
+      } else {
+        drag = { mode: 'box', id: e.pointerId, start: ll, sp: map.latLngToContainerPoint(ll), hit, add, cur: ll,
+          rect: L.rectangle([ll, ll], { color: '#eab308', weight: 2, dashArray: '6 4', fillColor: '#fde047', fillOpacity: 0.12, interactive: false }).addTo(map) };
+      }
+    });
+    c.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const ll = map.mouseEventToLatLng(e);
+      if (drag.mode === 'box') { drag.cur = ll; drag.rect.setBounds(L.latLngBounds(drag.start, ll)); return; }
+      const dx = ll.lng - drag.start.lng, dy = ll.lat - drag.start.lat;
+      if (!drag.moved && Math.hypot(dx, dy) === 0) return;
+      drag.moved = true;
+      drag.orig.forEach((gs, k) => { const g = JSON.parse(gs); eachCoord(g, co => { co[0] += dx; co[1] += dy; }); drag.lyr.sel.get(k).geometry = g; });
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; redrawLayer(drag.lyr); });
+    });
+    const end = e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag; drag = null;
+      try { c.releasePointerCapture(e.pointerId); } catch (err) {}
+      if (d.mode === 'move') {
+        if (!d.moved) { undoStack.pop(); syncHandUi(); return; }
+        if (e.type === 'pointercancel') { d.orig.forEach((gs, k) => { d.lyr.sel.get(k).geometry = JSON.parse(gs); }); undoStack.pop(); syncManual(d.lyr); return; }
+        d.orig.forEach((gs, k) => updateAuto(d.lyr, d.lyr.sel.get(k)));
+        syncManual(d.lyr); return;
+      }
+      map.removeLayer(d.rect);
+      if (e.type === 'pointercancel') return;
+      const tiny = map.latLngToContainerPoint(d.cur).distanceTo(d.sp) < 5;
+      if (tiny) {
+        if (d.hit) pickFeatures(d.hit.lyr, [d.hit.key], d.add ? 'toggle' : 'replace');
+        else if (!d.add) clearPicks();
+        return;
+      }
+      const b = L.latLngBounds(d.start, d.cur), act = activeLayer();
+      const order = (act ? [act] : []).concat(layers.slice().reverse().filter(l => l !== act));
+      for (const l of order) {
+        if (!l.visible) continue;
+        const keys = []; layerPairs(l).forEach(([k, f]) => { if (featHitsBounds(f, b)) keys.push(k); });
+        if (keys.length) { pickFeatures(l, keys, d.add ? 'add' : 'replace'); return; }
+      }
+      if (!d.add) clearPicks();
+      toast('No features inside that box.', 'warn');
+    };
+    c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+  })();
+
+  /* ----- ribbon buttons ----- */
+  $('#btnSelAll').addEventListener('click', () => { const l = editTargetLayer(); if (l && l.sel.size) pickFeatures(l, Array.from(l.sel.keys()), 'replace'); });
+  $('#btnSelClear').addEventListener('click', clearPicks);
+  $('#btnDel').addEventListener('click', deletePicked);
+  $('#btnAttr').addEventListener('click', () => openAttr());
+  $('#btnUndo').addEventListener('click', () => { if (hand && handPts.length) { handPts.pop(); drawPrev(null); syncHandUi(); } else undo(); });
+  $('#btnRedo').addEventListener('click', redo);
+  $('#btnNewLayer').addEventListener('click', () => openLayerModal('new'));
+  $('#btnFields').addEventListener('click', () => { const l = editTargetLayer(); if (l) openLayerModal('fields', l); else toast('Create an editable layer first (New layer, or just start drawing).', 'warn'); });
+  $('#btnHandDl').addEventListener('click', () => {
+    const l = editTargetLayer();
+    if (!l || !l.sel.size) { toast('Nothing drawn yet. Use the Draw tools first.', 'warn'); return; }
+    openExport('shp', l.id);
+  });
+  $('#btnHandClear').addEventListener('click', () => {
+    const l = editTargetLayer(); if (!l || !l.sel.size) return;
+    if (!confirm('Delete all ' + l.sel.size + ' features on “' + l.name + '”? (Undo can bring them back until you close the page.)')) return;
+    pushUndo(l); l.sel.clear(); l.picked.clear(); handPts = []; handPrev.clearLayers(); syncManual(l);
+  });
+  document.addEventListener('keydown', e => {
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') || $$('.overlay').some(o => !o.hidden)) return;
+    const ctrl = e.ctrlKey || e.metaKey, k = (e.key || '').toLowerCase();
+    if (ctrl && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+    if (ctrl && k === 'y') { e.preventDefault(); redo(); return; }
+    if (e.key === 'Escape' && !hand && pickedLayer()) { clearPicks(); return; }
+    if (!hand) return;
+    if (e.key === 'Enter' && handPts.length) { e.preventDefault(); finishDraw(); }
+    else if (e.key === 'Backspace' && handPts.length) { e.preventDefault(); handPts.pop(); drawPrev(null); syncHandUi(); }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && !handPts.length && pickedLayer()) { e.preventDefault(); deletePicked(); }
+  });
+
+  /* ----- attribute form ----- */
+  const attrModal = $('#attrModal'); let attrCtx = null;
+  function openAttr() { openAttrPane(); }
+  function openAttrOld() {
+    const lyr = pickedLayer();
+    if (!lyr) { toast('Select a feature first (Select tool, or click a row in the attribute table).', 'warn'); return; }
+    const keys = Array.from(lyr.picked), feats = keys.map(k => lyr.sel.get(k)).filter(Boolean);
+    attrCtx = { lyr, keys };
+    $('#attrTitle').textContent = 'Attributes – ' + lyr.name;
+    $('#attrInfo').textContent = feats.length === 1 ? 'Editing feature FID ' + feats[0].properties.FID + '. Automatic fields can’t be edited.' : 'Editing ' + feats.length + ' selected features. Only the fields you change are updated; “mixed” means the values differ.';
+    $('#attrAllLbl').textContent = 'Also apply my changes to all ' + nf(lyr.sel.size) + ' features in this layer';
+    $('#attrAll').checked = false;
+    let coord = '';
+    if (feats.length === 1 && feats[0].geometry) {
+      try { const c = L.geoJSON(feats[0]).getBounds().getCenter(); coord = '<div class="attr-coord">' + c.lat.toFixed(7) + ', ' + c.lng.toFixed(7) + '</div>'; } catch (err) {}
+    }
+    const rows = lyr.fields.map(fd => {
+      const vals = feats.map(f => f.properties[fd.name]);
+      const same = vals.every(v => String(v == null ? '' : v) === String(vals[0] == null ? '' : vals[0]));
+      const val = same && vals[0] != null ? vals[0] : '';
+      return '<tr><td class="an" title="' + esc((fd.alias || fd.name) + ' – ' + (TYPE_LABEL[fd.type] || '') + (fd.auto ? ' (automatic)' : '')) + '">' + esc(fd.alias || fd.name) + '</td>' +
+        '<td class="av"><input type="' + (fd.type === 'esriFieldTypeString' ? 'text' : 'number') + '" step="any" data-f="' + esc(fd.name) + '" value="' + esc(val) + '"' + (same ? '' : ' placeholder="‹mixed›"') + (fd.auto ? ' disabled' : '') + ' autocomplete="off"></td></tr>';
+    }).join('');
+    $('#attrForm').innerHTML = coord + '<table class="attr-tbl"><tbody>' + rows + '</tbody></table>';
+    attrModal.hidden = false;
+    setTimeout(() => { const i = $('#attrForm input:not([disabled])'); if (i) { i.focus(); i.select(); } }, 30);
+  }
+  $('#attrForm').addEventListener('input', e => { if (e.target.dataset && e.target.dataset.f) e.target.dataset.dirty = '1'; });
+  $('#attrForm').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#attrSave').click(); } });
+  $('#attrSave').addEventListener('click', () => {
+    if (!attrCtx) return; const lyr = attrCtx.lyr;
+    const changes = []; $$('#attrForm input[data-f]').forEach(i => { if (i.dataset.dirty) changes.push([lyr.fields.find(f => f.name === i.dataset.f), i.value]); });
+    attrModal.hidden = true;
+    if (!changes.length) { attrCtx = null; return; }
+    const keys = $('#attrAll').checked ? Array.from(lyr.sel.keys()) : attrCtx.keys; attrCtx = null;
+    pushUndo(lyr);
+    keys.forEach(k => { const f = lyr.sel.get(k); if (f) changes.forEach(([fd, v]) => { f.properties[fd.name] = coerce(fd, v); }); });
+    syncManual(lyr);
+    toast('Updated ' + changes.length + ' field' + (changes.length === 1 ? '' : 's') + ' on ' + keys.length + ' feature' + (keys.length === 1 ? '' : 's') + '.');
+  });
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.pop-edit'); if (!b) return;
+    const lyr = byId(b.dataset.lid); if (!lyr) return;
+    pickFeatures(lyr, [b.dataset.key], 'replace'); map.closePopup(); openAttr();
+  });
+
+  /* ----- new layer / edit fields dialog ----- */
+  const lm = { mode: 'new', lyr: null, rows: [] };
+  function lmType() { const r = $('input[name=lmtype]:checked'); return r ? r.value : 'polygon'; }
+  function renderLm() {
+    $('#lmFields').innerHTML = lm.rows.map((r, i) =>
+      '<div class="lm-row" data-i="' + i + '"><input type="text" class="lm-name" value="' + esc(r.name) + '" placeholder="Field name" autocomplete="off">' +
+      '<select class="lm-type"><option value="esriFieldTypeString"' + (r.type === 'esriFieldTypeString' ? ' selected' : '') + '>Text</option><option value="esriFieldTypeDouble"' + (r.type === 'esriFieldTypeDouble' ? ' selected' : '') + '>Number</option><option value="esriFieldTypeInteger"' + (r.type === 'esriFieldTypeInteger' ? ' selected' : '') + '>Whole number</option></select>' +
+      '<button class="icon-btn lm-del" type="button" title="Delete this field" aria-label="Delete field">✕</button></div>').join('') || '<div class="hint">No custom fields. Add one below, or leave it empty.</div>';
+    $('#lmAuto').textContent = AUTO_HINT[lm.mode === 'new' ? lmType() : lm.lyr.gtype];
+  }
+  function openLayerModal(mode, lyr) {
+    lm.mode = mode; lm.lyr = lyr || null;
+    $('#lmTitle').textContent = mode === 'new' ? 'New editable layer' : 'Edit fields – ' + lyr.name;
+    $('#lmTop').hidden = mode !== 'new';
+    if (mode === 'new') { $('#lmName').value = ''; $('input[name=lmtype][value=polygon]').checked = true; lm.rows = [{ name: 'NAME', type: 'esriFieldTypeString' }, { name: 'NOTES', type: 'esriFieldTypeString' }]; }
+    else lm.rows = lyr.userFields.map(f => ({ name: f.name, type: f.type, orig: f.name }));
+    renderLm(); $('#layerModal').hidden = false;
+    setTimeout(() => { const i = mode === 'new' ? $('#lmName') : $('#lmFields input'); if (i) i.focus(); }, 30);
+  }
+  $$('input[name=lmtype]').forEach(r => r.addEventListener('change', renderLm));
+  $('#lmFields').addEventListener('input', e => {
+    const row = e.target.closest('.lm-row'); if (!row) return; const r = lm.rows[Number(row.dataset.i)];
+    if (e.target.classList.contains('lm-name')) r.name = e.target.value; else if (e.target.classList.contains('lm-type')) r.type = e.target.value;
+  });
+  $('#lmFields').addEventListener('change', e => { const row = e.target.closest('.lm-row'); if (row && e.target.classList.contains('lm-type')) lm.rows[Number(row.dataset.i)].type = e.target.value; });
+  $('#lmFields').addEventListener('click', e => { const b = e.target.closest('.lm-del'); if (!b) return; lm.rows.splice(Number(b.closest('.lm-row').dataset.i), 1); renderLm(); });
+  $('#lmAdd').addEventListener('click', () => { lm.rows.push({ name: '', type: 'esriFieldTypeString' }); renderLm(); const ins = $$('#lmFields .lm-name'); if (ins.length) ins[ins.length - 1].focus(); });
+  $('#lmOk').addEventListener('click', () => {
+    const used = new Set(['FID'].concat(AUTO.polygon.concat(AUTO.line, AUTO.point).map(a => a.name)).map(x => x.toUpperCase())), out = [];
+    for (const r of lm.rows) {
+      let n = String(r.name || '').trim().replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, ''); if (!n) continue;
+      if (/^\d/.test(n)) n = 'F' + n;
+      if (used.has(n.toUpperCase())) { toast('The field name “' + n + '” is taken. FID and the automatic area, length and coordinate fields are reserved, and names must be different from each other.', 'err'); return; }
+      used.add(n.toUpperCase()); out.push({ name: n, type: r.type, orig: r.orig });
+    }
+    if (lm.mode === 'new') {
+      const gt = lmType(), l = createEditLayer($('#lmName').value.trim(), gt, out);
+      $('#layerModal').hidden = true; scheduleSave();
+      toast('Layer “' + l.name + '” created. Pick the ' + gt + ' tool in Draw and start clicking on the map.');
+      return;
+    }
+    const lyr = lm.lyr; pushUndo(lyr);
+    lyr.sel.forEach(f => {
+      const p = f.properties, np = { FID: p.FID };
+      out.forEach(o => {
+        let v = o.orig ? p[o.orig] : null; if (v === undefined) v = null;
+        const old = o.orig && lyr.userFields.find(u => u.name === o.orig);
+        if (old && old.type !== o.type) v = coerce({ type: o.type }, v);
+        np[o.name] = v;
+      });
+      AUTO[lyr.gtype].forEach(a => { np[a.name] = p[a.name]; });
+      f.properties = np;
+    });
+    lyr.userFields = out.map(o => ({ name: o.name, alias: o.name, type: o.type }));
+    lyr.fields = composeFields(lyr);
+    lyr.displayField = (lyr.userFields.find(f => f.type === 'esriFieldTypeString') || {}).name || '';
+    $('#layerModal').hidden = true; syncManual(lyr);
+    toast('Fields updated on “' + lyr.name + '”.');
+  });
+  $('#layerModal').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type === 'text') { e.preventDefault(); $('#lmOk').click(); } });
+
+  /* ----- rename any layer ----- */
+  let rnLyr = null;
+  function openRename(lyr) {
+    rnLyr = lyr; $('#rnInput').value = lyr.name; $('#renameModal').hidden = false;
+    setTimeout(() => { $('#rnInput').focus(); $('#rnInput').select(); }, 30);
+  }
+  $('#rnSave').addEventListener('click', () => {
+    const v = $('#rnInput').value.trim();
+    if (!rnLyr || !layers.includes(rnLyr)) { $('#renameModal').hidden = true; return; }
+    if (!v) { toast('Type a name for the layer.', 'warn'); return; }
+    rnLyr.name = v; $('#renameModal').hidden = true;
+    renderContents(); renderTable(); syncHandUi(); scheduleSave(); toast('Layer renamed to “' + v + '”.');
+  });
+  $('#rnInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#rnSave').click(); } });
+  $('#layerList').addEventListener('dblclick', e => {
+    const t = e.target.closest('.card-title'); if (!t) return;
+    const lyr = byId(t.closest('.card').dataset.id); if (lyr) openRename(lyr);
+  });
+
+  /* ---------- Street View: click the map, the screen splits, Street View opens on the right ---------- */
+  let svMarker = null, svDragging = false, svPano = null, svSvc = null, svLoading = null, svLast = null, svHeading = 0, svRot = 0, svToken = 0, svPoll = null, svFallbackWarned = false;
+  const svPane = $('#svPane');
+  function svMsg(t) { const m = $('#svMsg'); if (t) { m.textContent = t; m.hidden = false; } else m.hidden = true; }
+  function svSplit(open) {
+    const was = !svPane.hidden; svPane.hidden = !open;
+    if (was !== open) setTimeout(() => map.invalidateSize(), 30);
+    if (!open) { svFrameSeq++; if (svMarker) { map.removeLayer(svMarker); svMarker = null; } ['#svFrame', '#svFrame2'].forEach(q => { const f = $(q); f.src = 'about:blank'; f.hidden = true; f.dataset.front = '0'; }); svToken++; }
+  }
+  function svSetMarker(ll, heading) {
+    if (heading != null && isFinite(heading)) { svHeading = heading; svRot += ((heading - svRot) % 360 + 540) % 360 - 180; }   // shortest way round, no spinning back
+    const html = '<div style="transform:rotate(' + svRot + 'deg)"><svg viewBox="0 0 64 64" width="64" height="64">' +
+      '<defs><linearGradient id="svCone" gradientUnits="userSpaceOnUse" x1="32" y1="32" x2="32" y2="2"><stop offset="0" stop-color="#4285f4" stop-opacity=".7"/><stop offset="1" stop-color="#4285f4" stop-opacity="0"/></linearGradient></defs>' +
+      '<path d="M32 32 15 6.5A31 31 0 0 1 49 6.5Z" fill="url(#svCone)"/>' +
+      '<circle cx="32" cy="32" r="7.5" fill="#4285f4" stroke="#fff" stroke-width="2.6" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))"/></svg></div>';
+    if (!svMarker) {
+      svMarker = L.marker(ll, { icon: L.divIcon({ className: 'sv-marker', html, iconSize: [64, 64], iconAnchor: [32, 32] }), draggable: true, keyboard: false, zIndexOffset: 5000, title: 'Drag me to move Street View' }).addTo(map);
+      let last = 0;
+      svMarker.on('dragstart', () => { svDragging = true; });
+      
+      svMarker.on('dragend', e => { svDragging = false; svShow(e.target.getLatLng()); });
+    } else if (!svDragging) {
+      svMarker.setLatLng(ll); const el = svMarker.getElement(); if (el && el.firstChild) el.firstChild.style.transform = 'rotate(' + svRot + 'deg)';
+    } else { const el = svMarker.getElement(); if (el && el.firstChild) el.firstChild.style.transform = 'rotate(' + svRot + 'deg)'; }
+  }
+  var svSnapCache = {}, svFrameSeq = 0; const SV_PAINT_MS = 150;
+  async function svSnap(ll) {   // nearest road, so the Google picture always has a panorama and is never black
+    const key = ll.lat.toFixed(5) + ',' + ll.lng.toFixed(5);
+    if (svSnapCache[key]) return svSnapCache[key];
+    for (const base of ['https://router.project-osrm.org']) {
+      try {
+        const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 2000);
+        const r = await fetch(base + '/nearest/v1/driving/' + ll.lng.toFixed(6) + ',' + ll.lat.toFixed(6) + '?number=1', { signal: ctl.signal });
+        clearTimeout(tm);
+        const j = await r.json(), w = j && j.waypoints && j.waypoints[0];
+        if (w && w.location) { const p = L.latLng(w.location[1], w.location[0]); svSnapCache[key] = p; svSnapCache[p.lat.toFixed(5) + ',' + p.lng.toFixed(5)] = p; return p; }
+      } catch (err) { /* try next server */ }
+    }
+    return ll;
+  }
+  /* Two stacked frames: the new picture loads behind the old one and is swapped in only when ready, so the view never flashes black. */
+  async function svLoadFrame(ll, buffered) {
+    const my = ++svFrameSeq, fr = [$('#svFrame'), $('#svFrame2')];
+    let front = fr.find(f => f.dataset.front === '1'), back = fr.find(f => f !== front) || fr[0];
+    const direct = !buffered || !front;   // new spot chosen on the map: load straight into the frame the user is watching
+    if (direct) { back = front || fr[0]; front = null; back.dataset.front = '1'; back.style.zIndex = 2; fr.forEach(f => { if (f !== back) { f.style.zIndex = 1; f.dataset.front = '0'; } }); svMsg(''); }
+    const p = ll;   // load instantly; Google snaps to the nearest panorama itself
+    back.hidden = false;
+    /* onload only means the page arrived; Google then needs a moment to paint the panorama (that is the black).
+       So the hidden copy loads and paints behind the visible one, and is swapped in only after SV_PAINT_MS. */
+    const chip = $('#svWait'); if (front) chip.hidden = false;
+    back.onload = () => {
+      if (my !== svFrameSeq) return;
+      setTimeout(() => {
+        if (my !== svFrameSeq) return;
+        back.style.zIndex = 2; back.dataset.front = '1';
+        if (front && front !== back) { front.style.zIndex = 1; front.dataset.front = '0'; }
+        svMsg(''); chip.hidden = true;
+      }, front ? SV_PAINT_MS : 0);
+    };
+    back.src = 'https://maps.google.com/maps?layer=c&cbll=' + p.lat.toFixed(7) + ',' + p.lng.toFixed(7) + '&cbp=12,' + Math.round((svHeading % 360 + 360) % 360) + ',0,0,0&source=embed&output=svembed';
+    setTimeout(() => { if (my === svFrameSeq) { svMsg(''); chip.hidden = true; } }, 9000);
+    return p;
+  }
+  /* Mouse commands on the Street View drive the map symbol:
+     drag with the left button = the symbol turns live; single click = one step forward (upper part) or back (bottom strip);
+     press and hold = keep walking; mouse wheel = forward / back. The symbol always stays on the street. */
+  (function svMouse() {
+    const t = $('#svTouch'); let d = null, rt = null;
+    const cur = () => svMarker ? svMarker.getLatLng() : svLast;
+    function step(m) {
+      const ll = cur(); if (!ll) return;
+      const r = svHeading * Math.PI / 180;
+      svShow(L.latLng(ll.lat + m * Math.cos(r) / 111320, ll.lng + m * Math.sin(r) / (111320 * Math.cos(ll.lat * Math.PI / 180))), true);
+    }
+    const live = () => { clearTimeout(rt); rt = setTimeout(() => { const ll = cur(); if (ll) svLoadFrame(ll, true); }, 300); };
+    t.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      const r = t.getBoundingClientRect();
+      d = { x: e.clientX, h: svHeading, moved: false, hold: false, back: (e.clientY - r.top) / r.height > 0.72, iv: null, ht: null };
+      try { t.setPointerCapture(e.pointerId); } catch (err) {}
+      d.ht = setTimeout(() => { if (d && !d.moved) { d.hold = true; step(d.back ? -8 : 8); d.iv = setInterval(() => step(d.back ? -8 : 8), 900); } }, 450);
+    });
+    t.addEventListener('pointermove', e => {
+      if (!d) return;
+      const dx = e.clientX - d.x;
+      if (!d.moved && Math.abs(dx) < 4) return;
+      d.moved = true; clearTimeout(d.ht); clearInterval(d.iv); t.classList.add('drag');
+      const ll = cur(); if (!ll) return;
+      svSetMarker(ll, d.h - dx * 0.3);   // drag right = turn left, like Google; the map symbol turns at the same time
+      live();
+    });
+    const end = e => {
+      if (!d) return; const w = d; d = null;
+      clearTimeout(w.ht); clearInterval(w.iv); t.classList.remove('drag');
+      if (w.moved) { clearTimeout(rt); const ll = cur(); if (ll) svLoadFrame(ll, true); return; }
+      if (w.hold) return;
+      const r = t.getBoundingClientRect(), ring = document.createElement('div'); ring.className = 'ring';
+      ring.style.left = (e.clientX - r.left) + 'px'; ring.style.top = (e.clientY - r.top) + 'px'; t.appendChild(ring); setTimeout(() => ring.remove(), 520);
+      step(w.back ? -8 : 8);
+    };
+    t.addEventListener('pointerup', end);
+    t.addEventListener('pointercancel', () => { if (d) { clearTimeout(d.ht); clearInterval(d.iv); } d = null; t.classList.remove('drag'); });
+    let wl = 0;
+    t.addEventListener('wheel', e => { e.preventDefault(); const n = Date.now(); if (n - wl < 400) return; wl = n; step(e.deltaY < 0 ? 8 : -8); }, { passive: false });
+  })();
+  $('#svCtl').addEventListener('click', () => { const t = $('#svTouch'), on = !t.classList.contains('on'); t.classList.toggle('on', on); $('#svCtl').classList.toggle('on', on); $('#svCtl').textContent = 'Map-sync: ' + (on ? 'ON' : 'OFF'); });
+  function svOpenLink(ll) { $('#svOpen').href = 'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + ll.lat.toFixed(7) + ',' + ll.lng.toFixed(7); }
+  async function svShow(ll, buffered) {
+    svLast = ll; svSplit(true); svSetMarker(ll); svOpenLink(ll);
+    $('#svTitle').textContent = 'Street View · ' + ll.lat.toFixed(6) + ', ' + ll.lng.toFixed(6);
+    setMsg('Street View: drag in the view to turn the map symbol, click to walk forward (bottom strip = back), hold to keep walking.');
+    svLoadFrame(ll, buffered);
+    const p = await svSnap(ll);
+    if (p && svMarker && !svDragging && svLast === ll) { svSetMarker(p); svLast = p; svOpenLink(p); $('#svTitle').textContent = 'Street View · ' + p.lat.toFixed(6) + ', ' + p.lng.toFixed(6); }
+  }
+  function setSvMode(on) {
+    if (on) { if (traceMode) setTraceMode(false); if (drawMode) setDrawMode(false); if (eTool) setEditTool(null); }
+    svMode = on;
+    $('#btnStreet').classList.toggle('on', on);
+    $('#btnPan').classList.toggle('on', !on && !eTool);
+    $('#map').classList.toggle('handdraw', false);
+    map.getContainer().style.cursor = on ? 'crosshair' : '';
+    if (on) setMsg('Street View: click a road (or anywhere) on the map. The screen will split and Street View opens on the right. Esc to stop.');
+  }
+  $('#btnStreet').addEventListener('click', () => setSvMode(!svMode));
+  map.on('click', e => { if (svMode) svShow(e.latlng); });
+  $('#svClose').addEventListener('click', () => { svSplit(false); if (svMode) setSvMode(false); });
+  (function () { /* drag the divider to resize */
+    const g = $('#svGrip'); let drag = null;
+    g.addEventListener('pointerdown', e => { drag = { x: e.clientX, w: svPane.getBoundingClientRect().width }; g.setPointerCapture(e.pointerId); e.preventDefault(); });
+    g.addEventListener('pointermove', e => { if (!drag) return; svPane.style.width = Math.max(280, drag.w - (e.clientX - drag.x)) + 'px'; });
+    g.addEventListener('pointerup', () => { if (drag) { drag = null; map.invalidateSize(); } });
+  })();
+  $('#svPane').addEventListener('transitionend', () => map.invalidateSize());
 
   /* ---------- layers ---------- */
   function styleFromMeta(meta, idx) {
@@ -901,18 +2165,29 @@ const GGCore = (function () {
       else txt = esc(typeof v === 'object' ? JSON.stringify(v) : v);
       rows += '<tr><th>' + esc(fd.alias || fd.name) + '</th><td>' + txt + '</td></tr>';
     });
-    return '<div class="pop-title">' + esc(lyr.name) + '</div><div class="pop-scroll"><table>' + rows + '</table></div>';
+    return '<div class="pop-title">' + esc(lyr.name) + '</div><div class="pop-scroll"><table>' + rows + '</table></div>' + (lyr.manual ? '<div style="margin-top:8px"><button class="btn pop-edit" data-lid="' + lyr.id + '" data-key="' + esc(mkey(f)) + '">Edit attributes</button></div>' : '');
   }
 
   async function addFromInput() {
-    const raw = $('#urlInput').value.trim();
+    let raw = $('#urlInput').value.trim();
     if (!raw) { toast('Paste a layer address first.', 'warn'); return; }
     if (!/^https?:\/\//i.test(raw)) { toast('The address must start with https:// (or http://).', 'warn'); return; }
-    const tm = /[?&]token=([^&#]+)/.exec(raw);
-    state.token = $('#tokenInput').value.trim() || (tm ? decodeURIComponent(tm[1]) : '');
-    const url = normalizeUrl(raw);
     $('#addBtn').disabled = true; busy(1); setMsg('Reading the service…');
     try {
+      // Unwrap app share-links (Map Viewer "Add layer from URL", Field Maps, Experience
+      // Builder, StoryMaps…) and portal item pages so pasting the link people actually
+      // have – not just a bare REST address – works too.
+      const embedded = findEmbeddedServiceUrl(raw);
+      if (embedded) {
+        raw = embedded; $('#urlInput').value = raw;
+        toast('That was an ArcGIS app link – using the service address found inside it.');
+      } else if (!isServiceUrl(raw)) {
+        const itemUrl = await resolveArcgisItemUrl(raw);
+        if (itemUrl) { raw = itemUrl; $('#urlInput').value = raw; toast('Resolved the ArcGIS item page to its service address.'); }
+      }
+      const tm = /[?&]token=([^&#]+)/.exec(raw);
+      state.token = $('#tokenInput').value.trim() || (tm ? decodeURIComponent(tm[1]) : '');
+      const url = normalizeUrl(raw);
       const meta = await arcRequest(url, { f: 'json' });
       if (Array.isArray(meta.fields)) {
         await addLayer(url, meta, true);
@@ -925,9 +2200,9 @@ const GGCore = (function () {
           catch (e) { lastErr = e; }
         }
         if (!added) throw lastErr || new Error('No layer could be added.');
-        toast(added + ' layer' + (added > 1 ? 's' : '') + ' added. Only the first is switched on; tick the others to draw them.');
+        toast(added + ' layer' + (added > 1 ? 's' : '') + ' added (e.g. polygons + points from one service). Only the first is switched on; tick the others in Contents to draw them too.');
       } else {
-        throw new Error('This address is not an ArcGIS layer or service. It should end in /FeatureServer/0 or /MapServer/0.');
+        throw new Error('This address is not an ArcGIS REST layer or service, and no embedded service address or resolvable item id was found in it. Paste the raw address ending in /FeatureServer/0 or /MapServer/0 (or the whole service without a number), an ArcGIS app link that contains one, or a portal item page link.');
       }
     } catch (e) {
       if (e.code === 499 || e.code === 498) toast('This layer needs a token. Paste it in the Token box and try again.', 'err');
@@ -947,7 +2222,7 @@ const GGCore = (function () {
       oid: oidF ? oidF.name : (meta.objectIdField || 'OBJECTID'), displayField: meta.displayField || '',
       maxRec: meta.maxRecordCount || 1000, paging: !!adv.supportsPagination, orderBy: !!adv.supportsOrderBy,
       fmt: 'geojson', style: styleFromMeta(meta, seq - 1), where: '', minZoom: 0,
-      loaded: [], count: null, note: '', noteKind: '', reqId: 0, abort: null
+      loaded: [], sel: new Map(), picked: new Set(), pcache: new Map(), count: null, note: '', noteKind: '', reqId: 0, abort: null
     };
     try { const c = await arcRequest(url + '/query', { where: '1=1', returnCountOnly: true }); lyr.count = (typeof c.count === 'number') ? c.count : null; } catch (e) { /* count is optional */ }
     lyr.minZoom = lyr.count > 20000 ? 16 : lyr.count > 3000 ? 14 : 0;
@@ -955,7 +2230,7 @@ const GGCore = (function () {
       style: () => styleFor(lyr),
       pointToLayer: (f, ll) => L.circleMarker(ll, Object.assign({ radius: 5 }, styleFor(lyr)))
     });
-    lyr.gj.bindPopup(layer => popupHtml(lyr, layer.feature), { maxWidth: 380, maxHeight: 320, autoPanPadding: [30, 30] });
+    lyr.gj.on('click', e => featClick(lyr, e));
     lyr.gj.on('mouseover', e => { if (!drawMode && e.layer.setStyle) e.layer.setStyle({ color: '#f5b301', weight: lyr.style.weight + 2 }); });
     lyr.gj.on('mouseout', e => { if (e.layer.setStyle) lyr.gj.resetStyle(e.layer); });
     if (visible) lyr.gj.addTo(map);
@@ -975,6 +2250,7 @@ const GGCore = (function () {
     return null;
   }
   async function zoomToLayer(lyr) {
+    if (lyr.manual) { const mb = lyr.gj.getBounds(); if (mb.isValid()) map.fitBounds(mb, { padding: [30, 30], maxZoom: 19 }); else toast('Nothing drawn yet.', 'warn'); return; }
     busy(1);
     try {
       let bounds = null;
@@ -1017,7 +2293,7 @@ const GGCore = (function () {
   }
   const clampLng = v => Math.max(-180, Math.min(180, v)), clampLat = v => Math.max(-90, Math.min(90, v));
   async function refreshLayer(lyr) {
-    if (!layers.includes(lyr) || !lyr.visible) return;
+    if (lyr.manual || !layers.includes(lyr) || !lyr.visible) return;
     if (lyr.abort) lyr.abort.abort();
     const z = map.getZoom();
     if (z < lyr.minZoom) {
@@ -1035,15 +2311,31 @@ const GGCore = (function () {
       geometryType: 'esriGeometryEnvelope', inSR: 4326, spatialRel: 'esriSpatialRelIntersects',
       outFields: '*', returnGeometry: true, outSR: 4326
     };
-    if (lyr.paging) params.resultRecordCount = Math.min(lyr.maxRec, 3000);
     if (lyr.geom !== 'esriGeometryPoint') params.maxAllowableOffset = 360 / (256 * Math.pow(2, z));
+    const VIEW_SAFETY_CAP = 200000; // hard stop so an accidental world-view zoom-out can't hang the browser forever
     busy(1);
     try {
-      const res = await queryFeatures(lyr, params, lyr.abort.signal);
+      let all = [], exceeded = false, pages = 0;
+      if (lyr.paging) {
+        params.resultRecordCount = lyr.maxRec;
+        let offset = 0;
+        for (;;) {
+          if (my !== lyr.reqId) return;
+          const res = await queryFeatures(lyr, Object.assign({}, params, { resultOffset: offset }), lyr.abort.signal);
+          all = all.concat(res.features); pages++;
+          if (!res.exceeded || res.features.length === 0 || all.length >= VIEW_SAFETY_CAP) { exceeded = res.exceeded && all.length >= VIEW_SAFETY_CAP; break; }
+          offset += res.features.length;
+          if (pages > 1) setNote(lyr, 'Loading… ' + nf(all.length) + ' features so far.');
+        }
+      } else {
+        params.resultRecordCount = lyr.maxRec;
+        const res = await queryFeatures(lyr, params, lyr.abort.signal);
+        all = res.features; exceeded = res.exceeded;
+      }
       if (my !== lyr.reqId) return;
-      lyr.loaded = res.features; lyr.gj.clearLayers(); lyr.gj.addData(res.features);
-      if (res.exceeded) setNote(lyr, 'Showing the first ' + nf(res.features.length) + ' features in view. Zoom in to see the rest.', 'warn');
-      else setNote(lyr, nf(res.features.length) + ' feature' + (res.features.length === 1 ? '' : 's') + ' in view.');
+      lyr.loaded = all; lyr.gj.clearLayers(); lyr.gj.addData(all); selLayer.bringToFront(); pickLayer.bringToFront();
+      if (exceeded) setNote(lyr, 'Showing the first ' + nf(all.length) + ' features in view (view limit reached). Zoom in or draw a smaller box to see the rest.', 'warn');
+      else setNote(lyr, nf(all.length) + ' feature' + (all.length === 1 ? '' : 's') + ' in view' + (pages > 1 ? ' (loaded in ' + pages + ' batches)' : '') + '.');
       if (lyr.id === activeId) renderTable();
     } catch (e) {
       if (e && e.name === 'AbortError') return;
@@ -1067,9 +2359,9 @@ const GGCore = (function () {
         '<label>Fill color <input type="color" class="c-fill" value="' + esc(s.fill) + '"></label>' +
         '<label>Fill opacity <input type="range" class="c-fo" min="0" max="100" value="' + Math.round(s.fillOp * 100) + '"></label>' +
         '<label>Line width <input type="range" class="c-w" min="0.5" max="5" step="0.5" value="' + s.weight + '"></label>' +
-        '<label>Draw from zoom <input type="number" class="c-mz" min="0" max="21" value="' + lyr.minZoom + '"></label>' +
-        '<div><div class="hint" style="margin-bottom:4px">Definition query (SQL)</div><div class="where-row"><input type="text" class="c-where" value="' + esc(lyr.where) + '" placeholder="e.g. municipality = \'OAK PARK\'" spellcheck="false"><button class="btn" data-act="apply">Apply</button></div></div>' +
-        '<div class="card-btns"><button class="btn" data-act="zoom">Zoom to</button><button class="btn" data-act="info">Fields</button><button class="btn" data-act="export">Download</button><button class="btn" data-act="remove">Remove</button></div>' +
+        (lyr.manual ? '' : '<label>Draw from zoom <input type="number" class="c-mz" min="0" max="21" value="' + lyr.minZoom + '"></label>') +
+        (lyr.manual ? '' : '<div><div class="hint" style="margin-bottom:4px">Definition query (SQL)</div><div class="where-row"><input type="text" class="c-where" value="' + esc(lyr.where) + '" placeholder="e.g. municipality = \'OAK PARK\'" spellcheck="false"><button class="btn" data-act="apply">Apply</button></div></div>') +
+        '<div class="card-btns"><button class="btn" data-act="rename">Rename</button><button class="btn" data-act="zoom">Zoom to</button>' + (lyr.manual ? '<button class="btn" data-act="schema">Edit fields</button>' : '<button class="btn" data-act="info">Fields</button>') + '<button class="btn" data-act="export">Download</button><button class="btn" data-act="remove">Remove</button></div>' +
         '</div>' : '') +
       '</div>';
   }
@@ -1079,7 +2371,7 @@ const GGCore = (function () {
     box.innerHTML = layers.slice().reverse().map(cardHtml).join('');
   }
   function restyle(lyr) {
-    lyr.gj.setStyle(styleFor(lyr));
+    lyr.gj.setStyle(styleFor(lyr)); if (lyr.manual) scheduleSave();
     const card = $('.card[data-id="' + lyr.id + '"]');
     if (card) {
       card.style.borderLeftColor = lyr.style.line;
@@ -1115,6 +2407,7 @@ const GGCore = (function () {
       lyr.visible = t.checked;
       if (lyr.visible) { lyr.gj.addTo(map); setActive(lyr.id); refreshLayer(lyr); }
       else { if (lyr.abort) lyr.abort.abort(); map.removeLayer(lyr.gj); setNote(lyr, ''); }
+      renderSel(); renderPicks(); if (lyr.manual) scheduleSave();
     } else if (t.classList.contains('c-mz')) {
       lyr.minZoom = Math.max(0, Math.min(21, parseInt(t.value, 10) || 0)); refreshLayer(lyr);
     }
@@ -1132,11 +2425,17 @@ const GGCore = (function () {
     else if (act === 'apply') applyWhere(lyr, $('.c-where', card).value);
     else if (act === 'zoom') zoomToLayer(lyr);
     else if (act === 'info') showInfo(lyr);
+    else if (act === 'schema') openLayerModal('fields', lyr);
+    else if (act === 'rename') openRename(lyr);
     else if (act === 'export') openExport('shp', lyr.id);
     else if (act === 'remove') {
+      if (lyr.manual && lyr.sel.size && !confirm('Remove “' + lyr.name + '” and its ' + lyr.sel.size + ' drawn features?')) return;
       if (lyr.abort) lyr.abort.abort(); map.removeLayer(lyr.gj);
       layers.splice(layers.indexOf(lyr), 1); hi.clearLayers();
+      if (lyr.manual) { renderPicks(); buildHandles(); scheduleSave(); }
+      syncHandUi();
       if (activeId === lyr.id) activeId = layers.length ? layers[layers.length - 1].id : null;
+      renderSel();
       renderContents(); renderTable();
     }
   });
@@ -1153,41 +2452,269 @@ const GGCore = (function () {
     $('#infoModal').hidden = false;
   }
 
-  /* ---------- attribute table ---------- */
+  /* ---------- attribute table (ArcGIS Pro style) ---------- */
+  var tstates = {}, tblRows = [], tblAll = [], tblAnchor = null;
+  const COLW = 140, SELW = 30;
+  function tst(lyr) { return tstates[lyr.id] || (tstates[lyr.id] = { sort: null, dir: 1, showSel: false, filter: '', w: {}, rz: 0 }); }
+  function cellText(c, v) { return v == null ? '' : (GGCore.fieldKind(c.type) === 'date' ? GGCore.fmtDate(v) : (typeof v === 'object' ? JSON.stringify(v) : String(v))); }
+  function tableCols(lyr) { return lyr.fields.length ? lyr.fields : Object.keys(((lyr.loaded[0] || {}).properties) || {}).map(k => ({ name: k, alias: k, type: '' })); }
   function renderTable() {
     const lyr = activeLayer(), body = $('#tableBody');
     $('#dockTitle').textContent = lyr ? 'Attribute table – ' + lyr.name : 'Attribute table';
-    if (!lyr) { $('#dockSub').textContent = ''; body.innerHTML = '<div class="empty">Add a layer to see its attributes here.</div>'; return; }
-    if (!lyr.loaded.length) {
-      $('#dockSub').textContent = '';
-      body.innerHTML = '<div class="empty">' + esc(lyr.visible ? (lyr.note || 'No features in the current map view.') : 'This layer is switched off.') + '</div>'; return;
+    tblRows = []; tblAll = [];
+    if (!lyr) { $('#dockSub').textContent = ''; body.innerHTML = '<div class="empty">Add a layer to see its attributes here.</div>'; $('#tblNote').textContent = ''; updateTblBar(); return; }
+    const ts = tst(lyr), man = !!lyr.manual;
+    if (!lyr.loaded.length && !lyr.picked.size) {
+      $('#dockSub').textContent = ''; $('#tblNote').textContent = '';
+      body.innerHTML = '<div class="empty">' + esc(man ? 'Nothing drawn on this layer yet. Use the Draw tools on the ribbon.' : lyr.visible ? (lyr.note || 'No features in the current map view.') : 'This layer is switched off.') + '</div>';
+      updateTblBar(); return;
     }
-    const cols = lyr.fields.length ? lyr.fields : Object.keys(lyr.loaded[0].properties || {}).map(k => ({ name: k, alias: k, type: '' }));
-    const shown = lyr.loaded.slice(0, 300);
-    $('#dockSub').textContent = 'showing ' + nf(shown.length) + ' of ' + nf(lyr.loaded.length) + ' features in view – click a row to zoom to it';
-    let h = '<table><thead><tr>' + cols.map(c => '<th>' + esc(c.alias || c.name) + '</th>').join('') + '</tr></thead><tbody>';
+    const st = body.scrollTop, sl = body.scrollLeft, cols = tableCols(lyr);
+    let rows;
+    if (ts.showSel) rows = Array.from(lyr.picked).map(k => featByKey(lyr, k)).filter(Boolean);
+    else rows = lyr.loaded.slice();
+    const q = ts.filter.trim().toLowerCase();
+    if (q) rows = rows.filter(f => { const p = f.properties || {}; return cols.some(c => cellText(c, p[c.name]).toLowerCase().indexOf(q) >= 0); });
+    if (ts.sort) {
+      const sf = ts.sort, dir = ts.dir;
+      rows.sort((a, b) => {
+        const x = (a.properties || {})[sf], y = (b.properties || {})[sf];
+        if ((x == null || x === '') && (y == null || y === '')) return 0;
+        if (x == null || x === '') return 1; if (y == null || y === '') return -1;
+        const r = (typeof x === 'number' && typeof y === 'number') ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: 'base' });
+        return r * dir;
+      });
+    }
+    tblAll = rows.map(f => fkey(lyr, f));
+    const cap = man ? 2000 : 1000, shown = rows.slice(0, cap); tblRows = shown;
+    const widths = cols.map(c => ts.w[c.name] || COLW), total = SELW + widths.reduce((a, b) => a + b, 0);
+    $('#dockSub').textContent = '';
+    $('#tblNote').textContent = (q ? 'Filtered: ' + nf(rows.length) + ' row' + (rows.length === 1 ? '' : 's') + ' match.  ' : '') + (rows.length > cap ? 'Showing first ' + nf(cap) + ' rows.  ' : '') + (man ? '' : nf(lyr.loaded.length) + ' in view');
+    $('#tblHint').textContent = man ? 'Click a row to select · Ctrl/Shift to add · double-click a cell to edit' : 'Click a row to select · Ctrl/Shift to add · double-click the grey box to zoom';
+    let h = '<table class="gt" style="width:' + total + 'px"><colgroup><col style="width:' + SELW + 'px">' + widths.map(w => '<col style="width:' + w + 'px">').join('') + '</colgroup><thead><tr><th class="corner"></th>' +
+      cols.map((c, j) => '<th data-f="' + esc(c.name) + '" title="' + esc((c.alias || c.name) + ' – click to sort') + '"><span>' + esc(c.alias || c.name) + '</span>' + (ts.sort === c.name ? '<span class="sort">' + (ts.dir > 0 ? '▲' : '▼') + '</span>' : '') + '<i class="rs" data-j="' + j + '"></i></th>').join('') + '</tr></thead><tbody>';
     shown.forEach((f, i) => {
-      const p = f.properties || {};
-      h += '<tr data-i="' + i + '">' + cols.map(c => {
-        const v = p[c.name];
-        return '<td>' + (v === null || v === undefined ? '' : esc(GGCore.fieldKind(c.type) === 'date' ? GGCore.fmtDate(v) : (typeof v === 'object' ? JSON.stringify(v) : v))) + '</td>';
+      const p = f.properties || {}, k = tblAll[i];
+      h += '<tr data-i="' + i + '" data-k="' + esc(k) + '"' + (lyr.picked.has(k) ? ' class="selrow"' : '') + '><td class="rsel" title="Select row"></td>' + cols.map(c => {
+        const txt = cellText(c, p[c.name]);
+        return '<td data-f="' + esc(c.name) + '"' + (man && c.auto ? ' class="ro"' : '') + ' title="' + esc(txt) + '">' + esc(txt) + '</td>';
       }).join('') + '</tr>';
     });
-    body.innerHTML = h + '</tbody></table>';
+    body.innerHTML = h + '</tbody></table>'; body.scrollTop = st; body.scrollLeft = sl;
+    updateTblBar();
   }
-  $('#tableBody').addEventListener('click', e => {
-    const tr = e.target.closest('tr[data-i]'); const lyr = activeLayer(); if (!tr || !lyr) return;
-    const f = lyr.loaded[Number(tr.dataset.i)]; if (!f || !f.geometry) return;
-    hi.clearLayers(); hi.addData(f); hi.bringToFront();
-    const b = hi.getBounds(); if (b.isValid()) map.fitBounds(b, { maxZoom: 19, padding: [60, 60] });
+  function updateTblBar() {
+    const lyr = activeLayer(), ts = lyr ? tst(lyr) : null, n = lyr ? lyr.picked.size : 0;
+    const tot = lyr ? (lyr.manual ? lyr.sel.size : lyr.loaded.length) : 0;
+    $('#tShowAll').classList.toggle('on', !ts || !ts.showSel); $('#tShowSel').classList.toggle('on', !!(ts && ts.showSel));
+    $('#tShowSel').textContent = 'Selected (' + nf(n) + ')';
+    $('#tblCount').textContent = nf(n) + ' of ' + nf(tot);
+    $('#tSelAll').disabled = !lyr || !tblAll.length; $('#tSwitch').disabled = !lyr || !tblAll.length || (ts && ts.showSel);
+    $('#tClear').disabled = !n; $('#tZoom').disabled = !n; $('#tDel').disabled = !n || !lyr || !lyr.manual;
+    if (document.activeElement !== $('#tFilter')) $('#tFilter').value = ts ? ts.filter : '';
+  }
+  $('#tShowAll').addEventListener('click', () => { const l = activeLayer(); if (l) { tst(l).showSel = false; renderTable(); } });
+  $('#tShowSel').addEventListener('click', () => { const l = activeLayer(); if (l) { tst(l).showSel = true; renderTable(); } });
+  $('#tSelAll').addEventListener('click', () => { const l = activeLayer(); if (l && tblAll.length) pickFeatures(l, tblAll.slice(), 'replace'); });
+  $('#tSwitch').addEventListener('click', () => { const l = activeLayer(); if (!l) return; const ks = tblAll.filter(k => !l.picked.has(k)); if (ks.length) pickFeatures(l, ks, 'replace'); else clearPicks(); });
+  $('#tClear').addEventListener('click', clearPicks);
+  $('#tZoom').addEventListener('click', () => { if (!zoomToPicked()) toast('Select some rows first.', 'warn'); });
+  $('#tDel').addEventListener('click', deletePicked);
+  var tfTimer = null;
+  $('#tFilter').addEventListener('input', e => { const l = activeLayer(); if (!l) return; clearTimeout(tfTimer); const v = e.target.value; tfTimer = setTimeout(() => { tst(l).filter = v; renderTable(); }, 180); });
+  $('#tableBody').addEventListener('mousedown', e => {
+    const rs = e.target.closest('.rs'); if (!rs) return;
+    e.preventDefault(); e.stopPropagation();
+    const lyr = activeLayer(); if (!lyr) return; const ts = tst(lyr), j = Number(rs.dataset.j), c = tableCols(lyr)[j]; if (!c) return;
+    const x0 = e.clientX, w0 = ts.w[c.name] || COLW, colEl = $('#tableBody colgroup').children[j + 1], tbl = $('#tableBody table'), t0 = parseFloat(tbl.style.width);
+    const mv = ev => { const w = Math.max(50, w0 + ev.clientX - x0); colEl.style.width = w + 'px'; tbl.style.width = (t0 + w - w0) + 'px'; ts.w[c.name] = w; };
+    const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); ts.rz = Date.now(); };
+    document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
   });
+  $('#tableBody').addEventListener('click', e => {
+    const lyr = activeLayer(); if (!lyr) return;
+    const th = e.target.closest('th[data-f]');
+    if (th) {
+      const ts = tst(lyr); if (e.target.closest('.rs') || Date.now() - ts.rz < 250) return;
+      const f = th.dataset.f;
+      if (ts.sort !== f) { ts.sort = f; ts.dir = 1; } else if (ts.dir === 1) ts.dir = -1; else ts.sort = null;
+      renderTable(); return;
+    }
+    const tr = e.target.closest('tr[data-i]'); if (!tr || e.target.closest('input')) return;
+    const i = Number(tr.dataset.i), f = tblRows[i]; if (!f) return;
+    const tog = e.ctrlKey || e.metaKey, rng = e.shiftKey;
+    if (rng && tblAnchor != null && tblAnchor < tblRows.length) {
+      const a = Math.min(tblAnchor, i), z = Math.max(tblAnchor, i);
+      pickFeatures(lyr, tblAll.slice(a, z + 1), tog ? 'add' : 'replace');
+    } else {
+      pickFeatures(lyr, [tblAll[i]], tog ? 'toggle' : 'replace'); tblAnchor = i;
+      if (!tog && f.geometry) {
+        const gb = L.geoJSON(f).getBounds();
+        if (gb.isValid() && !map.getBounds().contains(gb.getCenter())) map.fitBounds(gb, { maxZoom: 19, padding: [60, 60] });
+      }
+    }
+  });
+  $('#tableBody').addEventListener('dblclick', e => {
+    const lyr = activeLayer(); if (!lyr) return;
+    if (e.target.closest('td.rsel')) { const tr = e.target.closest('tr[data-i]'); if (tr) { pickFeatures(lyr, [tblAll[Number(tr.dataset.i)]], 'replace'); zoomToPicked(); } return; }
+    const td = e.target.closest('td[data-f]');
+    if (!td || !lyr.manual || td.classList.contains('ro') || td.querySelector('input')) return;
+    const fd = lyr.fields.find(x => x.name === td.dataset.f), f = tblRows[Number(td.closest('tr').dataset.i)]; if (!fd || !f) return;
+    const inp = document.createElement('input');
+    inp.type = fd.type === 'esriFieldTypeString' ? 'text' : 'number'; inp.step = 'any'; inp.className = 'cell-edit';
+    inp.value = f.properties[fd.name] == null ? '' : f.properties[fd.name];
+    td.textContent = ''; td.appendChild(inp); inp.focus(); inp.select();
+    let done = false;
+    const commit = save => { if (done) return; done = true; if (save) setAttr(lyr, mkey(f), fd, inp.value); else renderTable(); };
+    inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') commit(true); else if (ev.key === 'Escape') { ev.stopPropagation(); commit(false); } });
+    inp.addEventListener('blur', () => commit(true));
+  });
+  (function dockResize() {
+    const grip = $('#dockGrip'); let drag = null;
+    grip.addEventListener('pointerdown', e => { drag = { y: e.clientY, h: $('#dock').offsetHeight }; try { grip.setPointerCapture(e.pointerId); } catch (err) {} e.preventDefault(); });
+    grip.addEventListener('pointermove', e => { if (!drag) return; const h = Math.max(140, Math.min(window.innerHeight * 0.8, drag.h + (drag.y - e.clientY))); $('#dock').style.height = h + 'px'; });
+    const end = () => { if (drag) { drag = null; map.invalidateSize(); } };
+    grip.addEventListener('pointerup', end); grip.addEventListener('pointercancel', end);
+  })();
+
+  /* ---------- right-hand attributes pane (ArcGIS-style: one feature or many at once) ---------- */
+  var ap = { lid: null, key: null, skip: false, sig: '' };
+  const AP_ICON = {
+    poly: '<svg viewBox="0 0 16 16"><path d="M3 12l2-8 8 2-1 7z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+    line: '<svg viewBox="0 0 16 16"><path d="M2 13l5-8 3 5 4-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    pt: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.6" fill="currentColor"/></svg>',
+    all: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="3" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="2" y="9" width="12" height="3" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>'
+  };
+  const apIcon = f => { const t = (f.geometry && f.geometry.type) || ''; return /Polygon/.test(t) ? AP_ICON.poly : /Line/.test(t) ? AP_ICON.line : AP_ICON.pt; };
+  function apLabel(lyr, f) {
+    const p = f.properties || {}, id = lyr.manual ? p.FID : (p[lyr.oid] != null ? p[lyr.oid] : fkey(lyr, f));
+    let v = lyr.displayField ? p[lyr.displayField] : null; if (v === '' || v === undefined) v = null;
+    return (v != null ? String(v) + '  ·  ' : '') + (lyr.manual ? 'FID ' : 'ID ') + id;
+  }
+  function apValueHtml(fd, v) {
+    if (v === null || v === undefined || v === '') return '<span class="nil">null</span>';
+    const t = GGCore.fieldKind(fd.type) === 'date' ? GGCore.fmtDate(v) : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+    if (/^https?:\/\/\S+$/i.test(t)) return '<a href="' + esc(t) + '" target="_blank" rel="noopener">' + esc(t) + '</a>';
+    return esc(t);
+  }
+  function renderAttrPane() {
+    if (ap.skip) return;
+    const body = $('#apBody'), lyr = pickedLayer();
+    if (!lyr) {
+      ap.key = null; ap.lid = null; $('#apCount').textContent = '';
+      body.innerHTML = '<div class="ap-empty"><svg viewBox="0 0 48 48"><rect x="8" y="10" width="32" height="28" rx="2"/><path d="M8 19h32M8 28h32M20 10v28"/></svg><div><b>No features selected</b></div><div>Click a feature on the map (Shift/Ctrl-click to add more), drag a box with the Select tool, or click rows in the attribute table.</div><button class="btn" id="apPickTool">Select tool</button></div>';
+      return;
+    }
+    if (ap.lid !== lyr.id) { ap.lid = lyr.id; ap.key = null; }
+    const keys = Array.from(lyr.picked).filter(k => featByKey(lyr, k)), n = keys.length;
+    if (!n) { body.innerHTML = ''; return; }
+    const sig = keys.join('|');
+    if (sig !== ap.sig) { ap.sig = sig; ap.key = null; }   // selection changed on the map/table: go back to “All N features”
+    if (n === 1) ap.key = keys[0]; else if (ap.key && !lyr.picked.has(ap.key)) ap.key = null;
+    const target = ap.key ? [ap.key] : keys, feats = target.map(k => featByKey(lyr, k));
+    const editable = !!lyr.manual;
+    $('#apCount').textContent = nf(n);
+    const s = lyr.style;
+    let h = '<div class="ap-layer"><div class="sw" style="background:' + esc(s.fillOp > 0.02 ? s.fill : 'transparent') + ';border-color:' + esc(s.line) + '"></div><b title="' + esc(lyr.name) + '">' + esc(lyr.name) + '</b><small>' + (editable ? 'Editable' : 'Read-only') + '</small></div>';
+    h += '<div class="ap-tools"><button class="btn" data-ap="zoom">Zoom to</button><button class="btn" data-ap="all">Select all</button><button class="btn" data-ap="clear">Clear</button>' + (editable ? '<button class="btn" data-ap="del">Delete</button>' : '') + '</div>';
+    // selected feature list
+    h += '<div><div class="ap-sec-h">Selected features <span>' + nf(n) + '</span></div><div class="ap-list">';
+    if (n > 1) h += '<div class="ap-row' + (ap.key ? '' : ' on') + '" data-k="*" title="Edit all selected features together">' + AP_ICON.all + '<span>All ' + nf(n) + ' features</span></div>';
+    keys.slice(0, 300).forEach(k => { const f = featByKey(lyr, k); h += '<div class="ap-row' + (ap.key === k ? ' on' : '') + '" data-k="' + esc(k) + '">' + apIcon(f) + '<span>' + esc(apLabel(lyr, f)) + '</span></div>'; });
+    if (n > 300) h += '<div class="ap-row more">…and ' + nf(n - 300) + ' more</div>';
+    h += '</div></div>';
+    // attribute grid
+    const multi = feats.length > 1;
+    h += '<div><div class="ap-sec-h">Attributes <span>' + (multi ? '– ' + nf(feats.length) + ' features' : '– ' + esc(apLabel(lyr, feats[0]))) + '</span></div>';
+    if (!multi && feats[0].geometry) {
+      try { const c = L.geoJSON(feats[0]).getBounds().getCenter(); h += '<div class="ap-loc" title="Centre of the feature (lat, lon)">' + c.lat.toFixed(7) + ', ' + c.lng.toFixed(7) + '</div>'; } catch (err) {}
+    }
+    h += '<table class="ap-grid"><tbody>';
+    const cols = lyr.fields.length ? lyr.fields : Object.keys(feats[0].properties || {}).map(k => ({ name: k, alias: k, type: '' }));
+    cols.forEach(fd => {
+      const vals = feats.map(f => (f.properties || {})[fd.name]);
+      const norm = v => String(v == null ? '' : v);
+      const same = vals.every(v => norm(v) === norm(vals[0])), v0 = vals[0];
+      h += '<tr><th title="' + esc((fd.alias || fd.name) + (TYPE_LABEL[fd.type] ? ' – ' + TYPE_LABEL[fd.type] : '') + (fd.auto ? ' (automatic)' : '')) + '">' + esc(fd.alias || fd.name) + '</th>';
+      if (editable) {
+        h += '<td><input class="ap-in" type="' + (fd.type === 'esriFieldTypeString' ? 'text' : 'number') + '" step="any" data-f="' + esc(fd.name) + '" value="' + esc(same && v0 != null ? v0 : '') + '"' + (same ? '' : ' placeholder="‹multiple values›"') + (fd.auto ? ' disabled' : '') + ' autocomplete="off"></td></tr>';
+      } else {
+        h += '<td class="v">' + (same ? apValueHtml(fd, v0) : '<span class="mixed">‹multiple values›</span>') + '</td></tr>';
+      }
+    });
+    h += '</tbody></table>';
+    h += '<div class="ap-note" style="margin-top:8px">' + (editable
+      ? (multi ? 'Editing ' + nf(feats.length) + ' features. Only fields you change are updated; “‹multiple values›” fields keep their own values until you type. ' : '') + 'Changes apply when you leave a field or press Enter (Ctrl+Z undoes). Grey fields are automatic.'
+      : 'This layer comes from a service, so its attributes are read-only. Draw or create an editable layer to edit attributes.') + '</div></div>';
+    const st = body.scrollTop; body.innerHTML = h; body.scrollTop = st;
+  }
+  function openAttrPane() {
+    const pane = $('#attrPane');
+    if (pane.classList.contains('collapsed')) { pane.classList.remove('collapsed'); $('#apCollapse').textContent = '›'; setTimeout(() => map.invalidateSize(), 60); }
+    if (!pickedLayer()) { toast('Select a feature first (click it, or use the Select tool / the attribute table).', 'warn'); return; }
+    setTimeout(() => { const i = $('#apBody .ap-in:not([disabled])'); if (i) { i.focus(); i.select(); } }, 30);
+  }
+  (function wireAttrPane() {
+    const pane = $('#attrPane'), body = $('#apBody');
+    $('#apCollapse').addEventListener('click', () => {
+      const c = pane.classList.toggle('collapsed'); $('#apCollapse').textContent = c ? '‹' : '›';
+      setTimeout(() => map.invalidateSize(), 60);
+    });
+    $('#apRail').addEventListener('click', () => $('#apCollapse').click());
+    body.addEventListener('click', e => {
+      if (e.target.closest('#apPickTool')) { setEditTool('select'); return; }
+      const row = e.target.closest('.ap-row[data-k]');
+      if (row) {
+        const lyr = pickedLayer(); if (!lyr) return;
+        if (row.dataset.k === '*') { ap.key = null; hi.clearLayers(); }
+        else {
+          ap.key = row.dataset.k;
+          const f = featByKey(lyr, ap.key);
+          if (f && f.geometry) { hi.clearLayers(); hi.addData(f); hi.bringToFront(); }
+        }
+        renderAttrPane(); return;
+      }
+      const btn = e.target.closest('[data-ap]'); if (!btn) return;
+      const lyr = pickedLayer(); if (!lyr) return;
+      if (btn.dataset.ap === 'zoom') {
+        if (ap.key) { const f = featByKey(lyr, ap.key); if (f && f.geometry) { const gb = L.geoJSON(f).getBounds(); if (gb.getNorthEast().equals(gb.getSouthWest())) map.setView(gb.getCenter(), Math.max(map.getZoom(), 18)); else map.fitBounds(gb, { maxZoom: 19, padding: [60, 60] }); } }
+        else zoomToPicked();
+      } else if (btn.dataset.ap === 'all') {
+        const ks = layerPairs(lyr).map(p => p[0]); if (ks.length) pickFeatures(lyr, ks, 'replace');
+      } else if (btn.dataset.ap === 'clear') clearPicks();
+      else if (btn.dataset.ap === 'del') deletePicked();
+    });
+    body.addEventListener('keydown', e => {
+      const inp = e.target.closest && e.target.closest('.ap-in'); if (!inp) return;
+      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+      else if (e.key === 'Escape') { e.stopPropagation(); inp.value = inp.defaultValue; inp.blur(); }
+    });
+    body.addEventListener('change', e => {
+      const inp = e.target.closest('.ap-in'); if (!inp) return;
+      const lyr = pickedLayer(); if (!lyr || !lyr.manual) return;
+      const fd = lyr.fields.find(f => f.name === inp.dataset.f); if (!fd || fd.auto) return;
+      const ks = (ap.key && lyr.picked.has(ap.key)) ? [ap.key] : Array.from(lyr.picked);
+      pushUndo(lyr);
+      ks.forEach(k => { const f = lyr.sel.get(k); if (f) f.properties[fd.name] = coerce(fd, inp.value); });
+      ap.skip = true; try { syncManual(lyr); } finally { ap.skip = false; }
+      inp.placeholder = ''; inp.defaultValue = inp.value;
+      setMsg('Updated “' + (fd.alias || fd.name) + '” on ' + nf(ks.length) + ' feature' + (ks.length === 1 ? '' : 's') + '.');
+    });
+  })();
+
   $('#btnTable').addEventListener('click', () => toggleDock());
   $('#dockClose').addEventListener('click', () => toggleDock(false));
   function toggleDock(force) {
     const d = $('#dock'); const show = force === undefined ? d.hidden : force;
     d.hidden = !show; $('#btnTable').classList.toggle('on', show); setTimeout(() => map.invalidateSize(), 50);
   }
-  map.on('click', () => { hi.clearLayers(); });
+  map.on('click', e => {
+    hi.clearLayers();
+    if (drawMode || traceMode || svMode || hand) return;
+    if (Date.now() - lastFeatClick < 120) return;
+    const oe = e.originalEvent; if (oe && (oe.shiftKey || oe.ctrlKey || oe.metaKey)) return;
+    if (pickedLayer()) clearPicks();
+  });
 
   /* ---------- download dialog ---------- */
   const exModal = $('#exportModal');
@@ -1205,10 +2732,24 @@ const GGCore = (function () {
     if (pref) $('#exNameField').value = pref.name;
     $('#exUseWhere').checked = !!lyr.where; $('#exUseWhere').disabled = !lyr.where;
     $('#exWhereLbl').textContent = lyr.where ? 'Apply the layer’s definition query: ' + lyr.where : 'No definition query on this layer';
+    const hasTrace = lyr.sel.size > 0;
+    $('#areaTrace').disabled = !hasTrace;
+    $('#areaTraceNote').textContent = hasTrace ? nf(lyr.sel.size) + ' parcel' + (lyr.sel.size === 1 ? '' : 's') + ' selected with Trace box (downloads exactly these)' : 'Nothing traced on this layer. Use “Trace box” on the ribbon first';
+    if (!hasTrace && $('#areaTrace').checked) $('input[name=area][value=view]').checked = true;
     const hasBox = !!boxLayer;
-    $('#areaBox').disabled = !hasBox;
+    $$('input[name=area]').forEach(r => { if (r.value === 'view' || r.value === 'all') r.disabled = !!lyr.manual; });
+    const npk = lyr.picked ? lyr.picked.size : 0;
+    $('#areaPicked').disabled = !npk;
+    $('#areaPickedNote').textContent = npk ? nf(npk) + ' selected feature' + (npk === 1 ? '' : 's') : 'Select features with the Select tool first';
+    $('#areaTrace').nextElementSibling.querySelector('b').textContent = lyr.manual ? 'All features in layer' : 'Traced parcels';
+    if (lyr.manual) {
+      $('#areaTrace').disabled = !hasTrace; $('#areaTraceNote').textContent = nf(lyr.sel.size) + ' feature' + (lyr.sel.size === 1 ? '' : 's') + ' drawn on this layer';
+      if (!($('#areaPicked').checked && npk)) $('#areaTrace').checked = true;
+      $('#exUseWhere').checked = false; $('#exUseWhere').disabled = true; $('#exWhereLbl').textContent = 'No definition query on a hand-drawn layer';
+    } else if ($('#areaPicked').checked && !npk) $('input[name=area][value=view]').checked = true;
+    $('#areaBox').disabled = !hasBox || !!lyr.manual;
     $('#areaBoxNote').textContent = hasBox ? 'The dashed orange box you drew on the map' : 'Use “Draw box” on the ribbon first';
-    if (!hasBox && $('#areaBox').checked) $('input[name=area][value=view]').checked = true;
+    if ((!hasBox || lyr.manual) && $('#areaBox').checked) $('input[name=area][value=view]').checked = true;
     updateFmtUi();
   }
   function updateFmtUi() {
@@ -1225,7 +2766,7 @@ const GGCore = (function () {
     const lyr = byId(layerId) || activeLayer();
     fillExportLayers(lyr.id);
     $('input[name=fmt][value=' + fmt + ']').checked = true;
-    $('input[name=area][value=' + (boxLayer ? 'box' : 'view') + ']').checked = true;
+    $('input[name=area][value=' + (lyr.manual && lyr.picked.size ? 'picked' : lyr.sel.size ? 'trace' : boxLayer ? 'box' : 'view') + ']').checked = true;
     syncExportForm(); setExStatus(''); setExProgress(null);
     exModal.hidden = false;
   }
@@ -1245,7 +2786,7 @@ const GGCore = (function () {
     const lyr = byId($('#exLayer').value);
     const noCap = $('#exNoCap').checked;
     return {
-      lyr, fmt: $('input[name=fmt]:checked').value, area: $('input[name=area]:checked').value,
+      lyr, fmt: $('input[name=fmt]:checked').value, area: (lyr && lyr.manual) ? ($('input[name=area]:checked').value === 'picked' ? 'picked' : 'trace') : $('input[name=area]:checked').value,
       useWhere: $('#exUseWhere').checked, noCap,
       cap: noCap ? Infinity : Math.max(1, Math.min(5000000, parseInt($('#exCap').value, 10) || 20000)),
       name: GGCore.sanitizeName($('#exName').value || (lyr && lyr.name)), nameField: $('#exNameField').value
@@ -1254,6 +2795,7 @@ const GGCore = (function () {
   $('#exNoCap').addEventListener('change', () => { $('#exCap').disabled = $('#exNoCap').checked; });
   $('#exCount').addEventListener('click', async () => {
     const o = readExportForm(); if (!o.lyr) return;
+    if (o.area === 'trace' || o.area === 'picked') { const n = o.area === 'picked' ? o.lyr.picked.size : o.lyr.sel.size; setExStatus(nf(n) + ' feature' + (n === 1 ? '' : 's') + ' will be downloaded.', 'ok'); return; }
     setExStatus('Counting…'); busy(1);
     try {
       const r = await arcRequest(o.lyr.url + '/query', Object.assign(filterParams(o.lyr, o.area, o.useWhere), { returnCountOnly: true }));
@@ -1316,13 +2858,19 @@ const GGCore = (function () {
     exportAbort = new AbortController(); const signal = exportAbort.signal;
     setExportBusy(true); setExProgress(0); setExStatus('Counting features…'); busy(1);
     try {
-      const filter = filterParams(o.lyr, o.area, o.useWhere);
-      const c = await arcRequest(o.lyr.url + '/query', Object.assign({}, filter, { returnCountOnly: true }), signal);
-      const total = c.count || 0;
-      if (!total) throw new Error('No features match this selection. Try “Entire layer” or a different area.');
-      const target = Math.min(total, o.cap);
-      setExStatus('Downloading ' + nf(target) + ' of ' + nf(total) + ' features…');
-      const feats = await fetchAll(o.lyr, filter, target, (d, t) => { setExProgress(0.85 * d / t); setExStatus('Downloaded ' + nf(d) + ' of ' + nf(t) + ' features…'); }, signal);
+      let total, feats;
+      if (o.area === 'trace' || o.area === 'picked') {
+        feats = o.area === 'picked' ? Array.from(o.lyr.picked).map(k => featByKey(o.lyr, k)).filter(Boolean) : Array.from(o.lyr.sel.values()); total = feats.length;
+        if (!total) throw new Error(o.area === 'picked' ? 'No features are selected on this layer.' : 'Nothing is traced or drawn on this layer yet.');
+      } else {
+        const filter = filterParams(o.lyr, o.area, o.useWhere);
+        const c = await arcRequest(o.lyr.url + '/query', Object.assign({}, filter, { returnCountOnly: true }), signal);
+        total = c.count || 0;
+        if (!total) throw new Error('No features match this selection. Try “Entire layer” or a different area.');
+        const target = Math.min(total, o.cap);
+        setExStatus('Downloading ' + nf(target) + ' of ' + nf(total) + ' features…');
+        feats = await fetchAll(o.lyr, filter, target, (d, t) => { setExProgress(0.85 * d / t); setExStatus('Downloaded ' + nf(d) + ' of ' + nf(t) + ' features…'); }, signal);
+      }
       if (!feats.length) throw new Error('The server returned no features.');
       setExStatus('Building ' + o.fmt.toUpperCase() + ' file…'); setExProgress(0.88);
       await new Promise(r => setTimeout(r, 30));
@@ -1364,7 +2912,125 @@ const GGCore = (function () {
     tpl.addEventListener('change', () => { state.proxyTpl = tpl.value.trim(); proxyHosts.clear(); proxyToasted.clear(); });
     setInterval(sync, 1500);
   })();
+  (function wireGeoSearch() {
+    const input = $('#geoQ');
+    const box = document.createElement('div'); box.id = 'geoResults'; box.hidden = true; document.body.appendChild(box);
+    let timer = null, seq = 0, items = [], selIdx = -1, marker = null;
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    function place() {
+      const r = input.getBoundingClientRect();
+      box.style.left = r.left + 'px'; box.style.top = (r.bottom + 4) + 'px'; box.style.width = Math.max(280, r.width) + 'px';
+    }
+    function hide() { box.hidden = true; box.innerHTML = ''; items = []; selIdx = -1; }
+    function parseCoords(text) {
+      const m = /^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/.exec(text.trim());
+      if (!m) return null;
+      const a = parseFloat(m[1]), b = parseFloat(m[2]);
+      if (Math.abs(a) > 90 || Math.abs(b) > 180) return null;
+      return { lat: a, lon: b };
+    }
+    function goTo(lat, lon, bbox, label) {
+      if (marker) { map.removeLayer(marker); marker = null; }
+      if (bbox) {
+        const south = parseFloat(bbox[0]), north = parseFloat(bbox[1]), west = parseFloat(bbox[2]), east = parseFloat(bbox[3]);
+        if ([south, north, west, east].every(Number.isFinite)) map.fitBounds([[south, west], [north, east]], { maxZoom: 17 });
+        else map.setView([lat, lon], 14);
+      } else map.setView([lat, lon], 15);
+      marker = L.marker([lat, lon]).addTo(map);
+      if (label) marker.bindPopup(esc(label)).openPopup();
+      hide();
+    }
+    function render() {
+      if (!items.length) { box.hidden = true; return; }
+      place();
+      box.innerHTML = items.map((it, i) =>
+        '<div class="gi' + (i === selIdx ? ' sel' : '') + '" data-i="' + i + '"><b>' + esc(it.mainText) + '</b><small>' + esc(it.subText) + '</small></div>'
+      ).join('');
+      box.hidden = false;
+      $$('.gi', box).forEach(el => el.addEventListener('click', () => pick(parseInt(el.dataset.i, 10))));
+    }
+    function pick(i) {
+      const it = items[i]; if (!it) return;
+      input.value = it.mainText;
+      goTo(it.lat, it.lon, it.bbox, it.label);
+    }
+    async function search(text) {
+      const coords = parseCoords(text);
+      if (coords) {
+        items = [{ mainText: coords.lat.toFixed(5) + ', ' + coords.lon.toFixed(5), subText: 'Coordinates (lat, lon)', lat: coords.lat, lon: coords.lon, bbox: null, label: 'Coordinates' }];
+        selIdx = 0; render(); return;
+      }
+      const mySeq = ++seq;
+      try {
+        const u = 'https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=' + encodeURIComponent(text);
+        const r = await fetch(u); const d = await r.json();
+        if (mySeq !== seq) return;
+        items = (Array.isArray(d) ? d : []).map(it => ({
+          mainText: (it.display_name || '').split(',')[0], subText: it.display_name || '',
+          lat: parseFloat(it.lat), lon: parseFloat(it.lon), bbox: it.boundingbox, label: it.display_name
+        }));
+        selIdx = items.length ? 0 : -1;
+        if (!items.length) { place(); box.innerHTML = '<div class="gi hint">No matching place found.</div>'; box.hidden = false; }
+        else render();
+      } catch (e) { if (mySeq === seq) { place(); box.innerHTML = '<div class="gi hint">Search failed: ' + esc(e.message || e) + '</div>'; box.hidden = false; } }
+    }
+    input.addEventListener('input', () => {
+      clearTimeout(timer); const v = input.value.trim();
+      if (!v) { hide(); return; }
+      timer = setTimeout(() => search(v), 400);
+    });
+    input.addEventListener('focus', () => { if (items.length) render(); });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown' && items.length) { selIdx = Math.min(items.length - 1, selIdx + 1); render(); e.preventDefault(); }
+      else if (e.key === 'ArrowUp' && items.length) { selIdx = Math.max(0, selIdx - 1); render(); e.preventDefault(); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (items.length) pick(Math.max(0, selIdx)); else { clearTimeout(timer); search(input.value.trim()); } }
+      else if (e.key === 'Escape') hide();
+    });
+    document.addEventListener('click', e => { if (!box.hidden && !box.contains(e.target) && e.target !== input) hide(); });
+    window.addEventListener('resize', () => { if (!box.hidden) place(); });
+    window.addEventListener('scroll', () => { if (!box.hidden) place(); }, true);
+  })();
   $('#addBtn').addEventListener('click', addFromInput);
+  (function wireFind() {
+    const modal = $('#findModal'), q = $('#findQ'), results = $('#findResults');
+    let seq = 0, timer = null;
+    $('#findBtn').addEventListener('click', () => { modal.hidden = false; q.value = ''; results.innerHTML = '<p class="hint">Search results appear here. Only public Feature and Map layers are shown — private or Esri-only layers won’t work with this tool.</p>'; setTimeout(() => q.focus(), 30); });
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    async function runSearch(text) {
+      const mySeq = ++seq;
+      results.innerHTML = '<p class="hint">Searching…</p>';
+      try {
+        const term = text.trim();
+        const qstr = (term ? term + ' AND ' : '') + '(type:"Feature Service" OR type:"Map Service") AND -type:"Vector Tile Service"';
+        const u = 'https://www.arcgis.com/sharing/rest/search?f=json&num=14&sortField=numViews&sortOrder=desc&q=' + encodeURIComponent(qstr);
+        const r = await fetch(u); const d = await r.json();
+        if (mySeq !== seq) return; // a newer search superseded this one
+        if (d.error) throw new Error(d.error.message || 'Search failed.');
+        const items = (d.results || []).filter(it => it.url);
+        if (!items.length) { results.innerHTML = '<p class="hint">No matching public layers found. Try different or fewer words.</p>'; return; }
+        results.innerHTML = '';
+        for (const it of items) {
+          const thumb = it.thumbnail ? 'https://www.arcgis.com/sharing/rest/content/items/' + it.id + '/info/' + it.thumbnail + '?w=88' : '';
+          const row = document.createElement('div'); row.className = 'find-item';
+          row.innerHTML =
+            '<img loading="lazy" src="' + esc(thumb) + '" onerror="this.style.visibility=\'hidden\'" alt="">' +
+            '<div class="fi-body">' +
+              '<div class="fi-title">' + esc(it.title) + '</div>' +
+              '<div class="fi-meta"><span>' + esc(it.type) + '</span><span>by ' + esc(it.owner) + '</span>' + (it.numViews ? '<span>' + nf(it.numViews) + ' views</span>' : '') + '</div>' +
+              (it.snippet ? '<div class="fi-snippet">' + esc(it.snippet) + '</div>' : '') +
+            '</div>' +
+            '<button class="btn primary" type="button">Add</button>';
+          row.querySelector('button').addEventListener('click', () => {
+            $('#urlInput').value = it.url;
+            modal.hidden = true;
+            addFromInput();
+          });
+          results.appendChild(row);
+        }
+      } catch (e) { if (mySeq === seq) results.innerHTML = '<p class="hint">Could not search ArcGIS Online: ' + esc(e.message || e) + '</p>'; }
+    }
+    q.addEventListener('input', () => { clearTimeout(timer); const v = q.value; timer = setTimeout(() => runSearch(v), 450); });
+  })();
   $('#urlInput').addEventListener('keydown', e => { if (e.key === 'Enter') addFromInput(); });
   $('#btnZoomLayer').addEventListener('click', () => { const l = activeLayer(); if (l) zoomToLayer(l); else toast('Add a layer first.', 'warn'); });
   $('#helpBtn').addEventListener('click', () => { $('#helpModal').hidden = false; });
@@ -1376,11 +3042,15 @@ const GGCore = (function () {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       if (drawMode) setDrawMode(false);
+      if (traceMode) setTraceMode(false);
+      if (svMode) setSvMode(false);
+      if (hand) { if (handPts.length) { handPts = []; drawPrev(null); syncHandUi(); } else setEditTool(null); }
       $$('.overlay').forEach(o => { if (!(o === exModal && exportRunning)) o.hidden = true; });
     }
   });
   window.addEventListener('resize', () => map.invalidateSize());
-  renderContents(); renderTable();
+  if (window.innerWidth <= 860) $('#attrPane').classList.add('collapsed');
+  loadEdits(); renderContents(); renderTable(); renderSel(); renderPicks(); syncHandUi(); renderAttrPane(); updateTblBar();
 })();
 </script>
 </body>
