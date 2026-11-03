@@ -45,7 +45,7 @@ button{cursor:pointer}
 @media (prefers-reduced-motion:reduce){#busy.on::after{animation:none;width:100%}}
 
 /* ---------- ribbon ---------- */
-.ribbon{display:flex;gap:0;background:#eaeeeb;border-bottom:1px solid var(--line);padding:0 8px;overflow-x:auto}
+.ribbon{scrollbar-width:thin;display:flex;gap:0;background:#eaeeeb;border-bottom:1px solid var(--line);padding:0 8px;overflow-x:auto}
 .grp{display:flex;flex-direction:column;padding:5px 12px 3px;border-right:1px solid var(--line);flex:none}
 .grp:last-child{border-right:0}
 .grp-btns{display:flex;gap:2px;align-items:flex-start;flex:1}
@@ -83,7 +83,18 @@ button{cursor:pointer}
 /* ---------- workspace ---------- */
 .workspace{flex:1;display:flex;min-height:0;position:relative}
 #contents{width:330px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
-#contents h2{margin:0;padding:10px 14px;font-size:14px;border-bottom:1px solid var(--line);background:#f0f3f1}
+#contents h2{margin:0;padding:10px 14px;font-size:14px;border-bottom:1px solid var(--line);background:#f0f3f1;display:flex;align-items:center;justify-content:space-between;gap:8px}
+#ctCollapse{border:0;background:transparent;font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;color:var(--muted)}
+#ctCollapse:hover{background:#dfe6e2}
+#ctRail{display:none;writing-mode:vertical-rl;padding:14px 0;font-weight:600;color:var(--ink-2);align-self:center;letter-spacing:.3px;cursor:pointer}
+@media (min-width:861px){
+  #contents{transition:width .18s ease;overflow:hidden}
+  #contents.collapsed{width:34px}
+  #contents.collapsed #layerList,#contents.collapsed #ctTitle{display:none}
+  #contents.collapsed h2{justify-content:center;padding:9px 0}
+  #contents.collapsed #ctRail{display:block}
+}
+@media (max-width:860px){#ctCollapse{display:none}}
 #layerList{flex:1;overflow:auto;padding:10px}
 .empty{color:var(--muted);padding:14px 6px;line-height:1.5}
 .card{border:1px solid var(--line);border-left:4px solid var(--accent);background:#fff;border-radius:4px;margin-bottom:10px}
@@ -109,6 +120,7 @@ button{cursor:pointer}
 .hint{font-size:12px;color:var(--muted)}
 
 #mapwrap{flex:1;min-width:0;display:flex;flex-direction:column}
+#mapwrap.dropping{outline:3px dashed var(--accent);outline-offset:-6px;background:var(--accent-l)}
 #svPane{flex:none;width:45%;min-width:280px;max-width:80%;display:flex;flex-direction:column;background:#111;border-left:3px solid var(--accent,#0f766e);position:relative}
 #svPane[hidden]{display:none}
 #svHead{display:flex;align-items:center;gap:10px;padding:6px 10px;background:#1c2321;color:#e7efec;font-size:13px;font-weight:600}
@@ -116,8 +128,15 @@ button{cursor:pointer}
 #svHead a{color:#7dd3c8;font-weight:500;text-decoration:none;font-size:12.5px}
 #svHead a:hover{text-decoration:underline}
 #svHead .icon-btn{color:#e7efec}
-#svBody{flex:1;min-height:0;position:relative}
-#svFrame,#svFrame2{position:absolute;inset:0;width:100%;height:100%;border:0}
+#svBody{flex:1;min-height:0;position:relative;overflow:hidden;isolation:isolate;contain:paint}
+#svFrame,#svFrame2{position:absolute;inset:0;width:100%;height:100%;border:0;background:#1c2321;transition:filter .25s ease,transform .25s ease,opacity .4s ease}
+#svFrame.blur,#svFrame2.blur{filter:blur(9px) brightness(.88) saturate(.9)}
+#svLoad{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;gap:10px;color:#e7efec;font-size:13px;pointer-events:none;opacity:0;transition:opacity .3s ease;background:linear-gradient(110deg,#1c2a27 20%,#34534c 45%,#1c2a27 70%);background-size:220% 100%;animation:svShimmer 1.6s linear infinite}
+#svLoad.on{opacity:1}
+#svLoad i{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:svSpin .8s linear infinite}
+@keyframes svShimmer{from{background-position:100% 0}to{background-position:-120% 0}}
+@keyframes svSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#svLoad{animation:none}#svLoad i{animation:none}}
 #svWait{position:absolute;right:10px;bottom:10px;z-index:6;background:rgba(20,34,45,.78);color:#fff;font-size:12px;padding:4px 10px;border-radius:12px;pointer-events:none}
 #svMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#cbd5d1;font-size:14px;line-height:1.5;z-index:3;background:#111}
 #svMsg[hidden]{display:none}
@@ -197,14 +216,15 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
 
 /* ---------- right-hand attributes pane ---------- */
 #attrPane{flex:none;width:330px;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;position:relative}
-#attrPane.collapsed{width:34px}
+#attrPane.collapsed{width:34px;overflow:hidden}
+#attrPane.collapsed #apHead .sp{display:none}
 #apHead{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#f0f3f1;border-bottom:1px solid var(--line);font-size:14px}
 #apHead b{font-weight:650}
 #apCount{background:#4aaee0;color:#fff;border-radius:10px;padding:0 8px;font-size:12px;font-weight:600}
 #apCount:empty{display:none}
 #apCollapse{border:0;background:transparent;font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;color:var(--muted)}
 #apCollapse:hover{background:#dfe6e2}
-#apRail{display:none;writing-mode:vertical-rl;padding:14px 0;font-weight:600;color:var(--ink-2);align-self:center;letter-spacing:.3px}
+#apRail{display:none;writing-mode:vertical-rl;padding:14px 0;font-weight:600;color:var(--ink-2);align-self:center;letter-spacing:.3px;cursor:pointer}
 #attrPane.collapsed #apBody,#attrPane.collapsed #apHead b,#attrPane.collapsed #apCount{display:none}
 #attrPane.collapsed #apHead{justify-content:center;padding:9px 0}
 #attrPane.collapsed #apRail{display:block}
@@ -266,6 +286,8 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
 #gate button:hover{background:var(--accent-d)}
 #gate .err{color:var(--err);font-size:12.5px;margin-top:10px;min-height:16px}
 #app.locked{display:none}
+html.unlocked #app.locked{display:flex}
+html.unlocked #gate{display:none}
 
 /* modal + toast */
 .overlay{position:fixed;inset:0;background:rgba(15,28,38,.55);display:flex;align-items:center;justify-content:center;z-index:3000;padding:14px}
@@ -289,6 +311,9 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
 .seg b{display:block}
 .seg i{display:block;font-style:normal;color:var(--muted);font-size:12px}
 .chk{display:flex;gap:8px;align-items:center;font-size:13px}
+.mlist{border:1px solid var(--line);border-radius:6px;max-height:150px;overflow:auto;padding:4px 6px;background:#fff}
+.mlist label{display:flex;gap:8px;align-items:center;padding:3px 2px;font-size:13px;cursor:pointer}
+.mlist label small{color:var(--muted)}
 .ex-status{min-height:20px;font-size:13px}
 .ex-status.err{color:var(--err)} .ex-status.ok{color:var(--accent-d)} .ex-status.warn{color:var(--warn)}
 .bar{height:8px;background:#e6ebe8;border-radius:5px;overflow:hidden}
@@ -340,7 +365,8 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
     if (pw.value === PASSWORD) {
       try { sessionStorage.setItem(SESSION_KEY, "1"); } catch(e) {}
       gate.hidden = true;
-      document.getElementById('app').classList.remove('locked');
+      document.documentElement.classList.add('unlocked');
+      var a = document.getElementById('app'); if (a) a.classList.remove('locked');
       if (window.dispatchEvent) window.dispatchEvent(new Event('resize'));
     } else {
       err.textContent = "Incorrect password. Try again.";
@@ -351,8 +377,9 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
   var already = false;
   try { already = sessionStorage.getItem(SESSION_KEY) === "1"; } catch(e) {}
   if (already) {
+    // #app is not in the DOM yet at this point, so use an <html> class instead of looking it up
     gate.hidden = true;
-    document.getElementById('app').classList.remove('locked');
+    document.documentElement.classList.add('unlocked');
   } else {
     setTimeout(function(){ pw.focus(); }, 30);
   }
@@ -379,6 +406,7 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
              placeholder="🔍 Address, city, state, country, or lat, lon…">
     </div>
     <button class="btn ghost" id="helpBtn">Help</button>
+    <button class="btn ghost" id="logoutBtn" title="Lock the tool and return to the password screen">Logout</button>
   </header>
   <div id="busy"></div>
 
@@ -393,10 +421,9 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
       <button class="tool" id="btnClearBox" data-icon="clear">Clear box</button>
     </div><div class="grp-cap">Select area</div></div>
     <div class="grp"><div class="grp-btns">
-      <button class="tool" id="btnTrace" data-icon="trace" title="Press and drag to draw a box. Every parcel inside or touching the box is selected.">Trace box</button>
-      <button class="tool" id="btnTraceClear" data-icon="clear">Clear trace</button>
-      <button class="tool dl" id="btnTraceDl" data-icon="down">Download traced</button>
-    </div><div class="grp-cap" id="traceCap">Trace parcels</div></div>
+      <button class="tool" id="btnImport" data-icon="up" title="Import Shapefile (.zip or .shp/.dbf/.prj), KML, KMZ, GeoJSON, GPX, CSV (lat/lon or WKT) and WKT files. You can also drag and drop files onto the map.">Import file</button>
+      <input type="file" id="impFile" multiple hidden accept=".zip,.kmz,.kml,.geojson,.json,.esrijson,.gpx,.csv,.tsv,.txt,.wkt,.shp,.dbf,.prj,.cpg,.shx">
+    </div><div class="grp-cap">Import</div></div>
     <div class="grp"><div class="grp-btns">
       <button class="tool" id="btnNewLayer" data-icon="newlayer" title="Create an editable layer: choose polygon, line or point and set its attribute fields">New layer</button>
       <button class="tool" id="btnFields" data-icon="fields" title="Add, rename or delete the attribute fields of the active editable layer">Edit fields</button>
@@ -425,10 +452,7 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
       <button class="tool" id="btnStreet" data-icon="street" title="Press, then click a road on the map. The screen splits and Google Street View opens on the right.">Street View</button>
     </div><div class="grp-cap">Street View</div></div>
     <div class="grp"><div class="grp-btns">
-      <button class="tool dl" data-export="shp" data-icon="down">Shapefile</button>
-      <button class="tool dl" data-export="kml" data-icon="down">KML</button>
-      <button class="tool dl" data-export="kmz" data-icon="down">KMZ</button>
-      <button class="tool dl" data-export="geojson" data-icon="down">GeoJSON</button>
+      <button class="tool dl" data-export="shp" data-icon="down" title="Choose a layer, file format (Shapefile, KML, KMZ, GeoJSON) and area to download">Download</button>
     </div><div class="grp-cap">Download</div></div>
     <div class="grp"><div class="grp-btns">
       <div class="tool"><select id="basemapSel" aria-label="Basemap"></select></div>
@@ -446,7 +470,8 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
 
   <div class="workspace">
     <aside id="contents">
-      <h2>Contents</h2>
+      <h2 id="ctHead"><span id="ctTitle">Contents</span><button type="button" id="ctCollapse" title="Hide / show Contents" aria-label="Hide or show Contents">‹</button></h2>
+      <div id="ctRail" title="Show Contents">Contents</div>
       <div id="layerList"></div>
     </aside>
     <main id="mapwrap">
@@ -470,13 +495,14 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
       </section>
     </main>
     <aside id="attrPane" aria-label="Attributes">
-      <div id="apHead"><b>Attributes</b><span id="apCount"></span><span id="apRail">Attributes</span><span class="sp"></span><button id="apCollapse" title="Hide / show the Attributes pane" aria-label="Toggle Attributes pane">›</button></div>
+      <div id="apHead"><b>Attributes</b><span id="apCount"></span><span class="sp"></span><button id="apCollapse" title="Hide / show the Attributes pane" aria-label="Toggle Attributes pane">›</button></div>
+      <div id="apRail" title="Show Attributes">Attributes</div>
       <div id="apBody"></div>
     </aside>
     <aside id="svPane" hidden>
       <div id="svGrip" title="Drag to resize"></div>
       <div id="svHead"><span id="svTitle">Street View</span><span class="sp"></span><button id="svCtl" title="OFF: use Google's own arrows and drag inside the view. ON: map-synced drag/click walking (blue dot follows).">Map-sync: OFF</button><a id="svOpen" href="#" target="_blank" rel="noopener">Open in Google Maps ↗</a><button class="icon-btn" id="svClose" title="Close Street View" aria-label="Close Street View">✕</button></div>
-      <div id="svBody"><iframe id="svFrame" hidden allowfullscreen referrerpolicy="no-referrer-when-downgrade" title="Google Street View"></iframe><iframe id="svFrame2" hidden allowfullscreen referrerpolicy="no-referrer-when-downgrade" title="Google Street View"></iframe><div id="svTouch" title="Drag to turn · click to walk forward (bottom strip = back) · hold to keep walking · scroll to move"></div><div id="svWait" hidden>Updating view…</div><div id="svMsg" hidden></div></div>
+      <div id="svBody"><iframe id="svFrame" hidden allowfullscreen referrerpolicy="no-referrer-when-downgrade" title="Google Street View"></iframe><iframe id="svFrame2" hidden allowfullscreen referrerpolicy="no-referrer-when-downgrade" title="Google Street View"></iframe><div id="svTouch" title="Drag to turn · click to walk forward (bottom strip = back) · hold to keep walking · scroll to move"></div><div id="svMsg" hidden></div></div>
     </aside>
   </div>
 
@@ -494,6 +520,10 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
     <div class="modal-head"><h2 id="exTitle">Download data</h2><button class="x" data-close aria-label="Close">×</button></div>
     <div class="modal-body">
       <label class="fld"><span class="lbl">Layer</span><select id="exLayer"></select></label>
+      <div class="fld" id="exMultiWrap" hidden><span class="lbl">Also download these layers <small style="font-weight:400;color:var(--muted)">(tick several to get one .zip with every layer)</small></span>
+        <div class="mlist" id="exMulti"></div>
+        <div class="hint"><a href="#" id="exMAll">Select all</a> · <a href="#" id="exMNone">None</a> · <span id="exMNote"></span></div>
+      </div>
       <div class="fld"><span class="lbl">File format</span>
         <div class="seg" id="exFmt">
           <label><input type="radio" name="fmt" value="shp" checked><span><b>Shapefile</b><i>.zip with .shp .shx .dbf .prj</i></span></label>
@@ -561,12 +591,13 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
         <li>Use <b>Go to place</b> on the ribbon to jump the map to any address, city, state, or country — or paste raw coordinates like <code>41.85, -87.65</code> (lat, lon) to jump straight there. Powered by OpenStreetMap's free search, so results are place names and addresses, not parcel data.</li>
         <li>Big layers such as county parcels only draw once you zoom in (the minimum zoom is shown on the layer card). Zoom in, then click any shape: its attributes appear in the Attributes pane on the right (Shift/Ctrl-click to select several).</li>
         <li>Use <b>Definition query</b> on the layer card to filter, for example <code>municipality = 'OAK PARK'</code>. The <b>Attribute table</b> lists what is loaded in the current view.</li>
-        <li>Press <b>Shapefile</b>, <b>KML</b>, <b>KMZ</b> or <b>GeoJSON</b>. Choose the map view, a box you drew, or the entire layer, then press <b>Download</b>. Tick “Download every matching feature” to remove the size limit entirely and fetch everything that matches, however many features that is — for a county-wide parcel layer this can be a large file and take a while, since ArcGIS servers only return a few thousand features per request.</li>
-        <li><b>Trace box:</b> with a layer showing, press <b>Trace box</b> on the ribbon, then press and drag a box around the parcels you want (zoom in until they draw). Every parcel inside or touching the box turns orange. A single click selects one parcel. Draw again to add more; <b>Clear trace</b> resets. Press <b>Download traced</b> (or any download button and pick “Traced parcels”) to save exactly those parcels as SHP / KML / KMZ / GeoJSON. The <b>Basemap</b> list now includes Google Roadmap, Satellite, Hybrid and Terrain.</li>
+        <li>Press <b>Download</b>. Choose the file format (Shapefile, KML, KMZ or GeoJSON), then the map view, a box you drew, or the entire layer, then press <b>Download</b>. Tick “Download every matching feature” to remove the size limit entirely and fetch everything that matches, however many features that is — for a county-wide parcel layer this can be a large file and take a while, since ArcGIS servers only return a few thousand features per request.</li>
         <li><b>Editable layers (draw your own parcels, lines and points):</b> press <b>New layer</b> to choose Polygon, Line or Point and set its attribute fields, or just pick a tool in <b>Draw</b> and a layer is created for you. Polygon/Line: click each corner, then double-click (or press Enter) to finish; corners snap to nearby ones. Point: click once. Tick “Ask for fields after drawing” to fill in the attributes straight away.</li>
         <li><b>Select &amp; edit:</b> <b>Select</b> clicks a feature (Shift adds) or drags a box; <b>Move</b> drags features; <b>Vertices</b> lets you drag a feature’s dots, drag a pale middle dot to add a corner, and right-click a dot to delete it; <b>Attributes</b> jumps to the Attributes pane on the right, which edits one feature or all selected features at once (pick “All N features” in its list; fields showing ‹multiple values› differ, and only fields you change are updated); <b>Delete</b>, <b>Undo</b> (Ctrl+Z) and <b>Redo</b> (Ctrl+Y) work as you’d expect. In the attribute table, click a row to select it and double-click a cell to edit it. <b>Edit fields</b> adds, renames or removes attribute fields. Area, length and coordinates are filled in automatically.</li>
         <li><b>Rename a layer</b> with the Rename button on its card in Contents (or double-click its name). Hand-drawn layers are auto-saved in this browser and come back when you reopen the page; use <b>Download drawn</b> (all features, or just the selected ones) to keep a real file.</li>
         <li><b>Street View:</b> press <b>Street View</b> on the ribbon, then click a road on the map. The screen splits and Google Street View opens on the right, with a Google-style blue dot and view cone on the map showing where you are and which way you face. Drag that dot along the road to move Street View with it (it snaps to the nearest road), or click elsewhere to jump, drag the grey bar between the two halves to resize, and press ✕ to close. Paste a Google Maps API key (Maps JavaScript API) into the ribbon box for the full interactive view where the marker follows you as you move along the road; without a key a basic embedded view is used. The key is kept only in this browser.</li>
+        <li><b>Import file:</b> press <b>Import file</b> in the Import group (or drag files onto the map) to load a Shapefile (a .zip, or select the .shp + .dbf + .prj together), KML, KMZ, GeoJSON / Esri JSON, GPX, CSV/TSV with latitude/longitude columns or a WKT column, or a .wkt file. Several files can be picked at once. Projected shapefiles are converted to lat/lon using their .prj. Each import becomes an editable layer (separate layers for polygons, lines and points when a file mixes them), so you can edit it and download it again in any format. File Geodatabases (.gdb), GeoPackage, DWG/DXF are not supported – convert them to Shapefile or GeoJSON first.</li>
+        <li><b>Download several layers at once:</b> open any Download dialog and tick more layers under “Also download these layers”. They are saved together in one .zip (one folder per layer for Shapefile, one file per layer for KML, KMZ and GeoJSON). Hand-drawn and imported layers are saved in full; service layers use the area you choose, falling back to the current map view if nothing is traced or selected on them.</li>
         <li>Shapefiles come as a .zip. Unzip it before opening in ArcGIS or QGIS. Shapefile field names are cut to 10 characters, so a <code>_field_names.txt</code> file lists the original names.</li>
         <li>Some servers (for example <code>gis.cookcountyil.gov/traditional/…</code>) refuse browser requests because they send no CORS header, even though the address opens fine in a tab. Leave <b>Connection</b> on <b>Auto</b> and the layer is retried through a public proxy; a notice appears when that happens. Public proxies are rate limited, so for a big download use your own proxy address in the box next to it, with <code>{url}</code> where the target address goes.</li>
       </ol>
@@ -626,6 +657,7 @@ table.attr-tbl td.av input:disabled{background:#f0f3f1;color:var(--muted)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
 
 <!-- ============================ EXPORT CORE (no DOM) ============================ -->
 <script id="core">
@@ -1032,6 +1064,7 @@ const GGCore = (function () {
     table: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M3 15h18M9 4v16"/></svg>',
     box: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" stroke-dasharray="3 2.5"/></svg>',
     clear: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    up: '<svg viewBox="0 0 24 24"><path d="M12 16V5M7 9l5-5 5 5M5 20h14"/></svg>',
     down: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>',
     layers: '<svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5M3 17.5l9 5 9-5"/></svg>',
     line: '<svg viewBox="0 0 24 24"><path d="M4 19 10 9l5 6 5-11"/><circle cx="4" cy="19" r="1.5"/><circle cx="20" cy="4" r="1.5"/></svg>',
@@ -1245,7 +1278,7 @@ const GGCore = (function () {
     const b = boxLayer.getBounds(); boxStart = null; setDrawMode(false);
     if (b.getNorth() === b.getSouth() || b.getEast() === b.getWest()) { clearBox(); return; }
     setMsg('Box drawn. Choose a download format and select “Drawn box”.');
-    toast('Box drawn. Press Shapefile, KML or KMZ and choose “Drawn box”.');
+    toast('Box drawn. Press Download and choose “Drawn box”.');
   });
 
   /* ---------- trace box: select parcels by drawing a box on the map ---------- */
@@ -1265,15 +1298,12 @@ const GGCore = (function () {
     layers.forEach(l => { if (!l.manual && l.visible && l.sel.size) selLayer.addData(Array.from(l.sel.values())); });
     selLayer.bringToFront();
     const n = selTotal();
-    $('#traceCap').textContent = n ? 'Traced: ' + nf(n) : 'Trace parcels';
-    $('#btnTraceDl').disabled = !n; $('#btnTraceClear').disabled = !n;
   }
   function setTraceMode(on) {
     if (on && drawMode) setDrawMode(false);
     if (on && hand) setHandMode(false);
     if (on && svMode) setSvMode(false);
     traceMode = on;
-    $('#btnTrace').classList.toggle('on', on);
     $('#map').classList.toggle('tracing', on);
     map.getContainer().style.cursor = on ? 'crosshair' : '';
     if (on) map.dragging.disable(); else map.dragging.enable();
@@ -1283,18 +1313,6 @@ const GGCore = (function () {
       setMsg(l ? 'Trace box: press and drag a box around the parcels you want on “' + l.name + '”. Release to select every parcel in the box; draw again to add more.' : 'Add a layer first, then use Trace box.');
     }
   }
-  $('#btnTrace').addEventListener('click', () => {
-    if (!layers.length) { toast('Add a layer to the map first.', 'warn'); return; }
-    const l = activeLayer();
-    if (!traceMode && l && map.getZoom() < l.minZoom) toast('Zoom in to level ' + l.minZoom + ' or closer so the parcels are visible, then draw a box around them.', 'warn');
-    setTraceMode(!traceMode);
-  });
-  $('#btnTraceClear').addEventListener('click', () => { layers.forEach(l => { if (!l.manual) l.sel.clear(); }); renderSel(); setMsg('Trace cleared.'); });
-  $('#btnTraceDl').addEventListener('click', () => {
-    const l = layers.find(x => !x.manual && x.sel.size && x.id === activeId) || layers.find(x => !x.manual && x.sel.size);
-    if (!l) { toast('Nothing traced yet. Use Trace box first.', 'warn'); return; }
-    openExport('shp', l.id);
-  });
   (function wireTraceDrag() {
     const c = map.getContainer();
     c.addEventListener('pointerdown', e => {
@@ -1596,7 +1614,9 @@ const GGCore = (function () {
   function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveEdits, 500); }
   function saveEdits() {
     try {
-      const data = layers.filter(l => l.manual).map(l => ({ name: l.name, gtype: l.gtype, userFields: l.userFields, nextId: l.nextId, style: l.style, visible: l.visible, features: Array.from(l.sel.values()) }));
+      const big = layers.filter(l => l.manual && l.sel.size > 20000);
+      if (big.length && !saveWarned) { saveWarned = true; toast('Layers with more than 20,000 features are not auto-saved in this browser. Use Download drawn to keep them.', 'warn'); }
+      const data = layers.filter(l => l.manual && l.sel.size <= 20000).map(l => ({ name: l.name, gtype: l.gtype, userFields: l.userFields, nextId: l.nextId, style: l.style, visible: l.visible, features: Array.from(l.sel.values()) }));
       if (data.length) localStorage.setItem('lg_edit_layers_v1', JSON.stringify(data)); else localStorage.removeItem('lg_edit_layers_v1');
     } catch (e) { if (!saveWarned) { saveWarned = true; toast('Your drawings could not be auto-saved in this browser (storage blocked or full). Use Download drawn to keep them.', 'warn'); } }
   }
@@ -1993,14 +2013,480 @@ const GGCore = (function () {
     const lyr = byId(t.closest('.card').dataset.id); if (lyr) openRename(lyr);
   });
 
+  /* ---------- Import: SHP (.zip or loose files), KML, KMZ, GeoJSON, Esri JSON, GPX, CSV/TSV (lat/lon or WKT), WKT ---------- */
+  (function wireImport() {
+    const SUPPORTED = 'Shapefile (.zip or .shp + .dbf + .prj), KML, KMZ, GeoJSON / JSON, Esri JSON, GPX, CSV / TSV / TXT (lat/lon or WKT column), WKT';
+    const MERC_MAX = 20037508.35;
+    const inp = $('#impFile');
+    $('#btnImport').addEventListener('click', () => inp.click());
+    inp.addEventListener('change', () => { const fs = Array.from(inp.files || []); inp.value = ''; importFiles(fs); });
+    const drop = $('#mapwrap');
+    const hasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf('Files') >= 0;
+    ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { if (hasFiles(e)) { e.preventDefault(); drop.classList.add('dropping'); } }));
+    drop.addEventListener('dragleave', e => { if (e.target === drop || !drop.contains(e.relatedTarget)) drop.classList.remove('dropping'); });
+    drop.addEventListener('drop', e => { drop.classList.remove('dropping'); if (!hasFiles(e)) return; e.preventDefault(); importFiles(Array.from(e.dataTransfer.files)); });
+
+    const extOf = n => { const m = /\.([A-Za-z0-9]+)$/.exec(n || ''); return m ? m[1].toLowerCase() : ''; };
+    const baseOf = n => String(n || '').split(/[\\/]/).pop().replace(/\.[A-Za-z0-9]+$/, '');
+    const num = v => (typeof v === 'number' && isFinite(v));
+
+    /* ----- geometry plumbing ----- */
+    function mapCoords(g, fn) {
+      if (!g) return g;
+      switch (g.type) {
+        case 'Point': return { type: 'Point', coordinates: fn(g.coordinates) };
+        case 'MultiPoint': case 'LineString': return { type: g.type, coordinates: g.coordinates.map(fn) };
+        case 'Polygon': case 'MultiLineString': return { type: g.type, coordinates: g.coordinates.map(a => a.map(fn)) };
+        case 'MultiPolygon': return { type: g.type, coordinates: g.coordinates.map(p => p.map(a => a.map(fn))) };
+        case 'GeometryCollection': return { type: g.type, geometries: g.geometries.map(x => mapCoords(x, fn)) };
+        default: return g;
+      }
+    }
+    function eachC(g, cb) {
+      if (!g) return;
+      if (g.type === 'GeometryCollection') { g.geometries.forEach(x => eachC(x, cb)); return; }
+      const walk = (a, d) => { if (d === 0) cb(a); else a.forEach(x => walk(x, d - 1)); };
+      const depth = { Point: 0, MultiPoint: 1, LineString: 1, Polygon: 2, MultiLineString: 2, MultiPolygon: 3 }[g.type];
+      if (depth !== undefined && g.coordinates) walk(g.coordinates, depth);
+    }
+    function utmLikeBounds(feats) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      feats.forEach(f => eachC(f.geometry, c => { if (c[0] < x0) x0 = c[0]; if (c[0] > x1) x1 = c[0]; if (c[1] < y0) y0 = c[1]; if (c[1] > y1) y1 = c[1]; }));
+      return [x0, y0, x1, y1];
+    }
+    function isLonLat(feats) { const b = utmLikeBounds(feats); return !isFinite(b[0]) || (b[0] >= -180 && b[2] <= 180 && b[1] >= -90 && b[3] <= 90); }
+    const fromMerc = c => [c[0] / 6378137 * 180 / Math.PI, Math.atan(Math.sinh(c[1] / 6378137)) * 180 / Math.PI];
+    function reproject(feats, fn) { feats.forEach(f => { f.geometry = mapCoords(f.geometry, c => fn([c[0], c[1]])); }); }
+    function autoProject(feats, why) {
+      if (isLonLat(feats)) return;
+      const b = utmLikeBounds(feats);
+      if (b.every(v => Math.abs(v) <= MERC_MAX)) { reproject(feats, fromMerc); return 'assumed Web Mercator (EPSG:3857)'; }
+      throw new Error('The coordinates are not longitude/latitude' + (why ? ' (' + why + ')' : '') + ' and the projection is unknown. For a shapefile include the .prj file.');
+    }
+    function projFromWkt(wkt, feats) {
+      if (isLonLat(feats) && /^\s*GEOGCS/i.test(wkt)) return null;
+      if (/^\s*GEOGCS/i.test(wkt)) return null;
+      if (typeof proj4 === 'undefined') { return autoProject(feats, 'the projection library did not load'); }
+      let conv;
+      try { conv = proj4(wkt, 'EPSG:4326'); conv.forward([feats.length ? utmLikeBounds(feats)[0] : 0, feats.length ? utmLikeBounds(feats)[1] : 0]); }
+      catch (e) { return autoProject(feats, 'could not read the .prj'); }
+      reproject(feats, c => { const r = conv.forward(c); return [r[0], r[1]]; });
+      return 'reprojected from its .prj';
+    }
+    function explode(g, out) {
+      if (!g) return out;
+      const ok = c => c && num(c[0]) && num(c[1]);
+      switch (g.type) {
+        case 'Point': if (ok(g.coordinates)) out.push({ type: 'Point', coordinates: [g.coordinates[0], g.coordinates[1]] }); break;
+        case 'MultiPoint': g.coordinates.forEach(c => explode({ type: 'Point', coordinates: c }, out)); break;
+        case 'LineString': { const cs = (g.coordinates || []).filter(ok).map(c => [c[0], c[1]]); if (cs.length > 1) out.push({ type: 'LineString', coordinates: cs }); break; }
+        case 'MultiLineString': g.coordinates.forEach(c => explode({ type: 'LineString', coordinates: c }, out)); break;
+        case 'Polygon': {
+          const rings = (g.coordinates || []).map(r => GGCore.closeRing((r || []).filter(ok).map(c => [c[0], c[1]]))).filter(r => r.length >= 4);
+          if (rings.length) out.push({ type: 'Polygon', coordinates: rings });
+          break;
+        }
+        case 'MultiPolygon': g.coordinates.forEach(c => explode({ type: 'Polygon', coordinates: c }, out)); break;
+        case 'GeometryCollection': g.geometries.forEach(x => explode(x, out)); break;
+      }
+      return out;
+    }
+
+    /* ----- GeoJSON / Esri JSON ----- */
+    function parseJsonText(text) {
+      const j = JSON.parse(text.replace(/^﻿/, ''));
+      if (j.type === 'Topology') throw new Error('TopoJSON is not supported. Convert it to GeoJSON first.');
+      let feats = [], note = '';
+      if (Array.isArray(j.features) && (j.geometryType || (j.features[0] && j.features[0].attributes !== undefined && j.features[0].type !== 'Feature'))) {
+        feats = GGCore.esriFeaturesToGeoJSON(j.features, null);
+        const wk = j.spatialReference && (j.spatialReference.latestWkid || j.spatialReference.wkid);
+        if ([3857, 102100, 102113, 900913].indexOf(wk) >= 0) { reproject(feats, fromMerc); note = 'reprojected from Web Mercator'; }
+        else if (wk && wk !== 4326) { const n = autoProject(feats, 'EPSG:' + wk); if (n) note = n; }
+        return { features: feats, note };
+      }
+      if (j.type === 'FeatureCollection') feats = (j.features || []);
+      else if (j.type === 'Feature') feats = [j];
+      else if (j.type) feats = [{ type: 'Feature', properties: {}, geometry: j }];
+      else throw new Error('This JSON file is not GeoJSON or Esri JSON.');
+      feats = feats.filter(f => f && f.geometry).map(f => ({ type: 'Feature', properties: f.properties || {}, geometry: f.geometry }));
+      const cn = j.crs && j.crs.properties && j.crs.properties.name, m = cn && /EPSG[:\/]+(\d+)/i.exec(cn);
+      if (m && [3857, 102100, 900913].indexOf(Number(m[1])) >= 0 && !isLonLat(feats)) { reproject(feats, fromMerc); note = 'reprojected from Web Mercator'; }
+      else { const n = autoProject(feats); if (n) note = n; }
+      return { features: feats, note };
+    }
+
+    /* ----- KML ----- */
+    const kids = (el, ln) => Array.from(el.children).filter(c => c.localName === ln);
+    const firstKid = (el, ln) => kids(el, ln)[0] || null;
+    function kmlCoords(t) {
+      return String(t || '').replace(/\s*,\s*/g, ',').trim().split(/\s+/).map(s => s.split(',').map(Number)).filter(a => a.length >= 2 && isFinite(a[0]) && isFinite(a[1])).map(a => [a[0], a[1]]);
+    }
+    function kmlGeoms(el, out) {
+      Array.from(el.children).forEach(c => {
+        const n = c.localName;
+        if (n === 'Point') { const cs = kmlCoords((c.getElementsByTagNameNS('*', 'coordinates')[0] || {}).textContent); if (cs.length) out.push({ type: 'Point', coordinates: cs[0] }); }
+        else if (n === 'LineString' || n === 'LinearRing') { const cs = kmlCoords((c.getElementsByTagNameNS('*', 'coordinates')[0] || {}).textContent); if (cs.length > 1) out.push({ type: 'LineString', coordinates: cs }); }
+        else if (n === 'Polygon') {
+          const rings = [];
+          const ob = firstKid(c, 'outerBoundaryIs');
+          if (ob) { const lr = ob.getElementsByTagNameNS('*', 'coordinates')[0]; if (lr) rings.push(kmlCoords(lr.textContent)); }
+          kids(c, 'innerBoundaryIs').forEach(ib => { const lr = ib.getElementsByTagNameNS('*', 'coordinates')[0]; if (lr) rings.push(kmlCoords(lr.textContent)); });
+          if (rings.length) out.push({ type: 'Polygon', coordinates: rings });
+        }
+        else if (n === 'Track') {
+          const cs = Array.from(c.getElementsByTagNameNS('*', 'coord')).map(x => x.textContent.trim().split(/\s+/).map(Number)).filter(a => a.length >= 2 && isFinite(a[0]) && isFinite(a[1])).map(a => [a[0], a[1]]);
+          if (cs.length > 1) out.push({ type: 'LineString', coordinates: cs });
+        }
+        else if (n === 'MultiGeometry' || n === 'MultiTrack') kmlGeoms(c, out);
+      });
+      return out;
+    }
+    function parseKmlText(text) {
+      const doc = new DOMParser().parseFromString(text.replace(/^﻿/, ''), 'application/xml');
+      if (doc.getElementsByTagName('parsererror').length) throw new Error('This KML file is not valid XML.');
+      const feats = [];
+      Array.from(doc.getElementsByTagNameNS('*', 'Placemark')).forEach(pm => {
+        const p = {};
+        const nm = firstKid(pm, 'name'); if (nm && nm.textContent.trim()) p.Name = nm.textContent.trim();
+        const ds = firstKid(pm, 'description'); if (ds && ds.textContent.trim()) p.Description = ds.textContent.trim().replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 500);
+        Array.from(pm.getElementsByTagNameNS('*', 'Data')).forEach(d => { const v = firstKid(d, 'value'); const k = d.getAttribute('name'); if (k) p[k] = v ? v.textContent.trim() : ''; });
+        Array.from(pm.getElementsByTagNameNS('*', 'SimpleData')).forEach(d => { const k = d.getAttribute('name'); if (k) p[k] = d.textContent.trim(); });
+        let par = pm.parentElement; while (par && par.localName !== 'Folder' && par.localName !== 'Document') par = par.parentElement;
+        if (par) { const fn = firstKid(par, 'name'); if (fn && fn.textContent.trim()) p.Folder = fn.textContent.trim(); }
+        const gs = kmlGeoms(pm, []);
+        gs.forEach(g => feats.push({ type: 'Feature', properties: p, geometry: g }));
+      });
+      return { features: feats, note: '' };
+    }
+
+    /* ----- GPX ----- */
+    function parseGpxText(text) {
+      const doc = new DOMParser().parseFromString(text.replace(/^﻿/, ''), 'application/xml');
+      if (doc.getElementsByTagName('parsererror').length) throw new Error('This GPX file is not valid XML.');
+      const feats = [], tx = (el, ln) => { const k = firstKid(el, ln); return k ? k.textContent.trim() : ''; };
+      const props = el => { const p = {}; ['name', 'desc', 'cmt', 'type', 'ele', 'time', 'sym'].forEach(k => { const v = tx(el, k); if (v !== '') p[k.toUpperCase()] = (k === 'ele' && isFinite(Number(v))) ? Number(v) : v; }); return p; };
+      const pt = e => [parseFloat(e.getAttribute('lon')), parseFloat(e.getAttribute('lat'))];
+      Array.from(doc.getElementsByTagNameNS('*', 'wpt')).forEach(w => { const c = pt(w); if (isFinite(c[0]) && isFinite(c[1])) feats.push({ type: 'Feature', properties: Object.assign({ KIND: 'waypoint' }, props(w)), geometry: { type: 'Point', coordinates: c } }); });
+      Array.from(doc.getElementsByTagNameNS('*', 'trk')).forEach(t => {
+        const p = Object.assign({ KIND: 'track' }, props(t));
+        kids(t, 'trkseg').forEach(s => { const cs = kids(s, 'trkpt').map(pt).filter(c => isFinite(c[0]) && isFinite(c[1])); if (cs.length > 1) feats.push({ type: 'Feature', properties: p, geometry: { type: 'LineString', coordinates: cs } }); });
+      });
+      Array.from(doc.getElementsByTagNameNS('*', 'rte')).forEach(r => {
+        const cs = kids(r, 'rtept').map(pt).filter(c => isFinite(c[0]) && isFinite(c[1]));
+        if (cs.length > 1) feats.push({ type: 'Feature', properties: Object.assign({ KIND: 'route' }, props(r)), geometry: { type: 'LineString', coordinates: cs } });
+      });
+      return { features: feats, note: '' };
+    }
+
+    /* ----- WKT ----- */
+    function wktParse(str) {
+      const T = String(str).trim().replace(/^SRID=\d+;/i, '').match(/[A-Za-z]+|[()]|,|[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g) || [];
+      let i = 0;
+      const expect = t => { if (T[i] !== t) throw new Error('Bad WKT near “' + (T[i] || 'end') + '”'); i++; };
+      const coord = () => { const n = []; while (i < T.length && /^[-+.\d]/.test(T[i])) n.push(Number(T[i++])); if (n.length < 2) throw new Error('Bad WKT coordinate'); return [n[0], n[1]]; };
+      const coordList = () => { expect('('); const a = [coord()]; while (T[i] === ',') { i++; a.push(coord()); } expect(')'); return a; };
+      const listOf = fn => { expect('('); const a = [fn()]; while (T[i] === ',') { i++; a.push(fn()); } expect(')'); return a; };
+      function geom() {
+        const t = (T[i++] || '').toUpperCase();
+        if (T[i] && /^(Z|M|ZM)$/i.test(T[i])) i++;
+        if (T[i] && T[i].toUpperCase() === 'EMPTY') { i++; return null; }
+        switch (t) {
+          case 'POINT': { expect('('); const c = coord(); expect(')'); return { type: 'Point', coordinates: c }; }
+          case 'LINESTRING': return { type: 'LineString', coordinates: coordList() };
+          case 'POLYGON': return { type: 'Polygon', coordinates: listOf(coordList) };
+          case 'MULTIPOINT': { expect('('); const pts = []; do { if (T[i] === '(') { i++; pts.push(coord()); expect(')'); } else pts.push(coord()); } while (T[i] === ',' && ++i); expect(')'); return { type: 'MultiPoint', coordinates: pts }; }
+          case 'MULTILINESTRING': return { type: 'MultiLineString', coordinates: listOf(coordList) };
+          case 'MULTIPOLYGON': return { type: 'MultiPolygon', coordinates: listOf(() => listOf(coordList)) };
+          case 'GEOMETRYCOLLECTION': { expect('('); const gs = []; do { const g = geom(); if (g) gs.push(g); } while (T[i] === ',' && ++i); expect(')'); return { type: 'GeometryCollection', geometries: gs }; }
+          default: throw new Error('Unknown WKT type “' + t + '”');
+        }
+      }
+      return geom();
+    }
+    function parseWktText(text) {
+      const feats = [];
+      text.replace(/^﻿/, '').split(/\r?\n/).forEach(l => {
+        l = l.trim(); if (!l || !/^(SRID=\d+;)?\s*[A-Za-z]+/.test(l)) return;
+        try { const g = wktParse(l); if (g) feats.push({ type: 'Feature', properties: {}, geometry: g }); } catch (e) { /* skip bad line */ }
+      });
+      if (!feats.length) throw new Error('No valid WKT geometries were found in this file.');
+      const n = autoProject(feats);
+      return { features: feats, note: n || '' };
+    }
+
+    /* ----- CSV / TSV ----- */
+    function parseDelimited(text) {
+      text = text.replace(/^﻿/, '');
+      const first = text.split(/\r?\n/, 1)[0] || '';
+      const cnt = d => (first.match(new RegExp(d === '\t' ? '\t' : '\\' + d, 'g')) || []).length;
+      const delim = [',', ';', '\t', '|'].sort((a, b) => cnt(b) - cnt(a))[0];
+      const rows = []; let row = [], cur = '', q = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+        else if (c === '"') q = true;
+        else if (c === delim) { row.push(cur); cur = ''; }
+        else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur); cur = ''; if (row.some(x => x !== '')) rows.push(row); row = []; }
+        else cur += c;
+      }
+      row.push(cur); if (row.some(x => x !== '')) rows.push(row);
+      return rows;
+    }
+    function parseCsvText(text) {
+      const rows = parseDelimited(text);
+      if (rows.length < 2) throw new Error('This table has no data rows.');
+      const head = rows[0].map(h => h.trim()), find = re => head.findIndex(h => re.test(h));
+      const wi = find(/^(wkt|wkt_geom|geom|geometry|the_geom|shape|geom_wkt)$/i);
+      let li = find(/^(lat|latitude|lat_dd|latitude_dd|y|ycoord|y_coord|point_y|ylat|north(ing)?)$/i);
+      let oi = find(/^(lon|lng|long|longitude|lon_dd|longitude_dd|x|xcoord|x_coord|point_x|xlon|east(ing)?)$/i);
+      const useXY = li >= 0 && oi >= 0;
+      if (!useXY && wi < 0) throw new Error('Could not find coordinate columns. Name them lat/lon (latitude/longitude, x/y) or add a WKT column.');
+      const feats = [], skip = new Set(useXY ? [li, oi] : [wi]);
+      const cols = head.map((h, k) => ({ k, h: h || ('COL' + (k + 1)) })).filter(c => !skip.has(c.k));
+      // detect numeric columns (leave leading-zero codes like 0123 as text)
+      const isNum = cols.map(c => { let any = false; for (let r = 1; r < rows.length; r++) { const v = (rows[r][c.k] || '').trim(); if (v === '') continue; any = true; if (!/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(v) || /^[-+]?0\d/.test(v)) return false; } return any; });
+      for (let r = 1; r < rows.length; r++) {
+        const row = rows[r], p = {};
+        cols.forEach((c, j) => { const v = (row[c.k] || '').trim(); p[c.h] = v === '' ? null : (isNum[j] ? Number(v) : v); });
+        let g = null;
+        if (useXY) {
+          let a = parseFloat((row[li] || '').replace(',', '.')), b = parseFloat((row[oi] || '').replace(',', '.'));
+          if (isFinite(a) && isFinite(b)) g = { type: 'Point', coordinates: [b, a] };
+        } else { try { g = wktParse(row[wi] || ''); } catch (e) { g = null; } }
+        if (g) feats.push({ type: 'Feature', properties: p, geometry: g });
+      }
+      if (!feats.length) throw new Error('No rows had usable coordinates.');
+      if (useXY && !isLonLat(feats)) { // lat/lon swapped?
+        const sw = feats.map(f => ({ geometry: { type: 'Point', coordinates: [f.geometry.coordinates[1], f.geometry.coordinates[0]] } }));
+        if (isLonLat(sw)) feats.forEach((f, i) => { f.geometry = sw[i].geometry; });
+      }
+      const n = autoProject(feats);
+      return { features: feats, note: n || '' };
+    }
+
+    /* ----- Shapefile ----- */
+    function parseShpBuf(buf) {
+      const dv = new DataView(buf); if (buf.byteLength < 100 || dv.getInt32(0, false) !== 9994) throw new Error('This is not a valid .shp file.');
+      const end = Math.min(buf.byteLength, dv.getInt32(24, false) * 2), out = [];
+      let off = 100;
+      while (off + 12 <= end) {
+        const clen = dv.getInt32(off + 4, false) * 2, p = off + 8, t = dv.getInt32(p, true); let g = null;
+        const kind = t % 10;
+        try {
+          if (t === 0) g = null;
+          else if (kind === 1 && t < 30) g = { type: 'Point', coordinates: [dv.getFloat64(p + 4, true), dv.getFloat64(p + 12, true)] };
+          else if (kind === 8 && t < 30) {
+            const n = dv.getInt32(p + 36, true), pts = []; for (let k = 0; k < n; k++) pts.push([dv.getFloat64(p + 40 + 16 * k, true), dv.getFloat64(p + 48 + 16 * k, true)]);
+            g = { type: 'MultiPoint', coordinates: pts };
+          } else if ((kind === 3 || kind === 5) && t < 30) {
+            const np = dv.getInt32(p + 36, true), n = dv.getInt32(p + 40, true), pi = p + 44, pb = pi + 4 * np, parts = [];
+            for (let k = 0; k < np; k++) {
+              const s = dv.getInt32(pi + 4 * k, true), e = k + 1 < np ? dv.getInt32(pi + 4 * (k + 1), true) : n, ring = [];
+              for (let m = s; m < e; m++) ring.push([dv.getFloat64(pb + 16 * m, true), dv.getFloat64(pb + 16 * m + 8, true)]);
+              parts.push(ring);
+            }
+            g = kind === 5 ? GGCore.esriToGeoJSONGeom({ rings: parts }) : GGCore.esriToGeoJSONGeom({ paths: parts });
+          }
+        } catch (e) { g = null; }
+        out.push(g);
+        off += 8 + clen; if (clen <= 0) break;
+      }
+      return out;
+    }
+    function cpgLabel(cpg) {
+      const c = String(cpg || '').trim().toUpperCase(); if (!c) return null;
+      if (/^UTF-?8$/.test(c)) return 'utf-8';
+      if (/^\d{3,5}$/.test(c)) return c === '65001' ? 'utf-8' : 'windows-' + c;
+      if (/^ISO-?8859-?(\d+)$/.test(c)) return 'iso-8859-' + /(\d+)$/.exec(c)[1];
+      return c.toLowerCase();
+    }
+    function parseDbfBuf(buf, cpg) {
+      const dv = new DataView(buf), u8 = new Uint8Array(buf);
+      const n = dv.getUint32(4, true), hl = dv.getUint16(8, true), rl = dv.getUint16(10, true), fields = [];
+      const label = cpgLabel(cpg); let dec = null, utf = null, w1252 = null;
+      try { if (label && label !== 'utf-8') dec = new TextDecoder(label); } catch (e) { dec = null; }
+      utf = new TextDecoder('utf-8', { fatal: true }); w1252 = new TextDecoder('windows-1252');
+      const decode = b => { if (dec) return dec.decode(b); try { return utf.decode(b); } catch (e) { return w1252.decode(b); } };
+      let pos = 32, off = 1;
+      while (pos + 32 <= hl && u8[pos] !== 0x0D) {
+        let nm = ''; for (let k = 0; k < 11 && u8[pos + k]; k++) nm += String.fromCharCode(u8[pos + k]);
+        const len = u8[pos + 16]; fields.push({ name: nm, t: String.fromCharCode(u8[pos + 11]), len, off }); off += len; pos += 32;
+      }
+      const rows = [];
+      for (let r = 0; r < n; r++) {
+        const b = hl + r * rl; if (b + rl > buf.byteLength) break;
+        if (u8[b] === 0x2A) { rows.push(null); continue; }
+        const p = {};
+        fields.forEach(f => {
+          const s = decode(u8.subarray(b + f.off, b + f.off + f.len)).replace(/\0/g, '').trim();
+          if (s === '') p[f.name] = null;
+          else if (f.t === 'N' || f.t === 'F') { const x = Number(s); p[f.name] = isFinite(x) ? x : s; }
+          else if (f.t === 'D' && /^\d{8}$/.test(s)) p[f.name] = s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+          else p[f.name] = s;
+        });
+        rows.push(p);
+      }
+      return rows;
+    }
+    function parseShpGroup(gr) {
+      if (!gr.shp) throw new Error('A .dbf file needs its .shp file (select them together, or use the .zip).');
+      const geoms = parseShpBuf(gr.shp), props = gr.dbf ? parseDbfBuf(gr.dbf, gr.cpg ? new TextDecoder().decode(gr.cpg) : '') : [];
+      const feats = [];
+      geoms.forEach((g, i) => { if (g && props[i] !== null) feats.push({ type: 'Feature', properties: props[i] || {}, geometry: g }); });
+      let note = '';
+      if (gr.prj) { const n = projFromWkt(new TextDecoder().decode(gr.prj), feats); if (n) note = n; }
+      else { const n = autoProject(feats, 'no .prj file'); if (n) note = n; }
+      return { features: feats, note };
+    }
+
+    /* ----- gather files (expands .zip / .kmz) and dispatch ----- */
+    async function collect(path, data, label, out, depth) {
+      const ext = extOf(path);
+      const buf = data instanceof ArrayBuffer ? data : await data.arrayBuffer();
+      if (ext === 'zip' || ext === 'kmz') {
+        if (typeof JSZip === 'undefined') throw new Error('The ZIP library did not load (needs internet), so .zip and .kmz cannot be read.');
+        if (depth > 2) return;
+        const zip = await JSZip.loadAsync(buf), arch = baseOf(path);
+        const names = Object.keys(zip.files).filter(n => !zip.files[n].dir && !/(^|\/)(__MACOSX|\.)/.test(n));
+        for (const n of names) {
+          const e = extOf(n); if (!(e === 'zip' || e === 'kmz' || IMPORT_EXT.indexOf(e) >= 0)) continue;
+          const inner = baseOf(n), lab = (ext === 'kmz' || /^(doc|doc\d*)$/i.test(inner)) ? arch : (names.length === 1 ? arch : inner);
+          await collect(path + '/' + n, await zip.files[n].async('arraybuffer'), lab, out, depth + 1);
+        }
+        return;
+      }
+      out.push({ path, ext, buf, label: label || baseOf(path) });
+    }
+    const IMPORT_EXT = ['kml', 'geojson', 'json', 'esrijson', 'gpx', 'csv', 'tsv', 'txt', 'wkt', 'shp', 'dbf', 'prj', 'cpg', 'shx'];
+    const dtext = buf => new TextDecoder('utf-8').decode(buf);
+
+    async function importFiles(files) {
+      if (!files.length) return;
+      busy(1); setMsg('Reading ' + (files.length === 1 ? files[0].name : files.length + ' files') + '…');
+      const results = [], errors = [];
+      try {
+        const entries = [];
+        for (const f of files) { try { await collect(f.name, f, null, entries, 0); } catch (e) { errors.push(f.name + ': ' + (e.message || e)); } }
+        // group shapefile parts by path without extension
+        const groups = new Map(), rest = [];
+        entries.forEach(en => {
+          if (['shp', 'dbf', 'prj', 'cpg', 'shx'].indexOf(en.ext) >= 0) {
+            const key = en.path.replace(/\.[A-Za-z0-9]+$/, '').toLowerCase();
+            if (!groups.has(key)) groups.set(key, { label: en.label });
+            groups.get(key)[en.ext] = en.buf;
+          } else rest.push(en);
+        });
+        await new Promise(r => setTimeout(r, 20));
+        groups.forEach((gr, key) => {
+          if (!gr.shp && !gr.dbf) return;
+          try { const r = parseShpGroup(gr); r.name = gr.label; r.kind = 'Shapefile'; results.push(r); }
+          catch (e) { errors.push(gr.label + ': ' + (e.message || e)); }
+        });
+        rest.forEach(en => {
+          try {
+            let r;
+            if (en.ext === 'kml') r = parseKmlText(dtext(en.buf));
+            else if (en.ext === 'gpx') r = parseGpxText(dtext(en.buf));
+            else if (en.ext === 'geojson' || en.ext === 'json' || en.ext === 'esrijson') r = parseJsonText(dtext(en.buf));
+            else if (en.ext === 'wkt') r = parseWktText(dtext(en.buf));
+            else if (en.ext === 'csv' || en.ext === 'tsv' || en.ext === 'txt') {
+              const t = dtext(en.buf);
+              r = /^\s*[\[{]/.test(t) ? parseJsonText(t) : /^\s*<\?xml|^\s*<kml/i.test(t) ? parseKmlText(t) : parseCsvText(t);
+            }
+            else throw new Error('Unsupported file type .' + en.ext);
+            r.name = en.label; r.kind = en.ext.toUpperCase(); results.push(r);
+          } catch (e) { errors.push(en.label + '.' + en.ext + ': ' + (e.message || e)); }
+        });
+        if (!results.length && !errors.length) errors.push('No supported files found. Supported: ' + SUPPORTED + '.');
+        const done = [];
+        results.forEach(r => { const s = addImported(r); if (s) done.push(s); });
+        if (done.length) {
+          const msg = 'Imported ' + done.join('; ') + '. Layers are editable and can be downloaded in any format.';
+          toast(msg + (errors.length ? ' Problems: ' + errors.join(' | ') : ''), errors.length ? 'warn' : '');
+          setMsg(msg);
+        } else if (errors.length) { toast('Import failed: ' + errors.join(' | '), 'err'); setMsg('Import failed: ' + errors.join(' | ')); }
+        else if (results.length) toast('The file was read but contained no usable geometry.', 'warn');
+      } catch (e) { toast('Import failed: ' + (e.message || e), 'err'); }
+      finally { busy(-1); }
+    }
+
+    /* ----- turn parsed features into editable layers ----- */
+    const RESERVED = new Set(['FID', 'AREA_SQFT', 'AREA_ACRES', 'LENGTH_FT', 'LENGTH_MI', 'LON', 'LAT']);
+    function buildSchema(feats) {
+      const info = new Map();
+      feats.forEach(f => {
+        const p = f.properties || {};
+        Object.keys(p).forEach(k => {
+          let i = info.get(k); if (!i) { i = { any: false, num: true, int: true }; info.set(k, i); }
+          const v = p[k]; if (v === null || v === undefined || v === '') return;
+          i.any = true;
+          if (num(v)) { if (!Number.isInteger(v) || Math.abs(v) > 2147483647) i.int = false; } else i.num = false;
+        });
+      });
+      const used = new Set(RESERVED), map = new Map(), fields = [];
+      let dropped = 0;
+      info.forEach((i, k) => {
+        if (fields.length >= 100) { dropped++; return; }
+        let n = String(k).trim().replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'FIELD';
+        if (/^\d/.test(n)) n = 'F' + n;
+        n = n.slice(0, 60);
+        let u = n, c = 1; while (used.has(u.toUpperCase())) u = n + '_' + (c++);
+        used.add(u.toUpperCase());
+        const type = (i.any && i.num) ? (i.int ? 'esriFieldTypeInteger' : 'esriFieldTypeDouble') : 'esriFieldTypeString';
+        map.set(k, { name: u, type }); fields.push({ name: u, type });
+      });
+      return { fields, map, dropped };
+    }
+    function addImported(r) {
+      const buckets = { polygon: [], line: [], point: [] };
+      let noGeom = 0, parts = 0;
+      r.features.forEach(f => {
+        const gs = explode(f.geometry, []);
+        if (!gs.length) { noGeom++; return; }
+        if (gs.length > 1) parts++;
+        gs.forEach(g => buckets[g.type === 'Polygon' ? 'polygon' : g.type === 'LineString' ? 'line' : 'point'].push({ props: f.properties || {}, g }));
+      });
+      const kinds = Object.keys(buckets).filter(k => buckets[k].length);
+      if (!kinds.length) return null;
+      const all = [].concat.apply([], kinds.map(k => buckets[k]));
+      const schema = buildSchema(all.map(x => ({ properties: x.props })));
+      let bounds = null, total = 0; const names = [];
+      kinds.forEach(k => {
+        const label = r.name || 'Imported';
+        const nm = kinds.length > 1 ? label + ' (' + (k === 'polygon' ? 'polygons' : k === 'line' ? 'lines' : 'points') + ')' : label;
+        const lyr = createEditLayer(nm, k, schema.fields.map(f => ({ name: f.name, type: f.type })));
+        buckets[k].forEach(x => {
+          const rnd = c => [Number(c[0].toFixed(8)), Number(c[1].toFixed(8))];
+          const g = mapCoords(x.g, rnd), f = newFeature(lyr, g);
+          schema.map.forEach((m, orig) => {
+            let v = x.props[orig];
+            if (v === undefined || v === '') v = null;
+            if (v !== null && m.type === 'esriFieldTypeString') v = typeof v === 'object' ? JSON.stringify(v) : String(v);
+            else if (v !== null && !num(v)) v = null;
+            f.properties[m.name] = v;
+          });
+        });
+        syncManual(lyr);
+        const b = lyr.gj.getBounds(); if (b.isValid()) bounds = bounds ? bounds.extend(b) : L.latLngBounds(b.getSouthWest(), b.getNorthEast());
+        total += buckets[k].length; names.push('“' + lyr.name + '”');
+      });
+      if (bounds) { if (bounds.getNorthEast().equals(bounds.getSouthWest())) map.setView(bounds.getCenter(), 17); else map.fitBounds(bounds, { padding: [30, 30], maxZoom: 19 }); }
+      let s = nf(total) + ' feature' + (total === 1 ? '' : 's') + ' from ' + r.kind + ' → ' + names.join(', ') + (r.note ? ' (' + r.note + ')' : '');
+      if (noGeom) s += ', ' + nf(noGeom) + ' skipped without geometry';
+      if (parts) s += ', multi-part shapes split into single parts';
+      if (schema.dropped) s += ', ' + schema.dropped + ' extra fields dropped (100 max)';
+      return s;
+    }
+  })();
+
   /* ---------- Street View: click the map, the screen splits, Street View opens on the right ---------- */
-  let svMarker = null, svDragging = false, svPano = null, svSvc = null, svLoading = null, svLast = null, svHeading = 0, svRot = 0, svToken = 0, svPoll = null, svFallbackWarned = false;
+  let svMarker = null, svDragging = false, svPano = null, svSvc = null, svLoading = null, svLast = null, svHeading = 0, svRot = 0, svToken = 0, svPoll = null, svFallbackWarned = false, svBusy = false;
   const svPane = $('#svPane');
   function svMsg(t) { const m = $('#svMsg'); if (t) { m.textContent = t; m.hidden = false; } else m.hidden = true; }
   function svSplit(open) {
     const was = !svPane.hidden; svPane.hidden = !open;
     if (was !== open) setTimeout(() => map.invalidateSize(), 30);
-    if (!open) { svFrameSeq++; if (svMarker) { map.removeLayer(svMarker); svMarker = null; } ['#svFrame', '#svFrame2'].forEach(q => { const f = $(q); f.src = 'about:blank'; f.hidden = true; f.dataset.front = '0'; }); svToken++; }
+    if (!open) { svFrameSeq++; if (svMarker) { map.removeLayer(svMarker); svMarker = null; } ['#svFrame', '#svFrame2'].forEach(q => { const f = $(q); f.src = 'about:blank'; f.hidden = true; f.dataset.front = '0'; f.classList.remove('blur'); f.style.opacity = ''; }); svToken++; svBusy = false; }
   }
   function svSetMarker(ll, heading) {
     if (heading != null && isFinite(heading)) { svHeading = heading; svRot += ((heading - svRot) % 360 + 540) % 360 - 180; }   // shortest way round, no spinning back
@@ -2018,7 +2504,7 @@ const GGCore = (function () {
       svMarker.setLatLng(ll); const el = svMarker.getElement(); if (el && el.firstChild) el.firstChild.style.transform = 'rotate(' + svRot + 'deg)';
     } else { const el = svMarker.getElement(); if (el && el.firstChild) el.firstChild.style.transform = 'rotate(' + svRot + 'deg)'; }
   }
-  var svSnapCache = {}, svFrameSeq = 0; const SV_PAINT_MS = 150;
+  var svSnapCache = {}, svFrameSeq = 0; const SV_PAINT_MS = 700;
   async function svSnap(ll) {   // nearest road, so the Google picture always has a panorama and is never black
     const key = ll.lat.toFixed(5) + ',' + ll.lng.toFixed(5);
     if (svSnapCache[key]) return svSnapCache[key];
@@ -2033,28 +2519,41 @@ const GGCore = (function () {
     }
     return ll;
   }
-  /* Two stacked frames: the new picture loads behind the old one and is swapped in only when ready, so the view never flashes black. */
+  /* Two stacked frames: the new 360° picture loads behind the current one. While it loads, the current picture is
+     shown blurred (never black), then the new one cross-fades in once Google has had time to paint it. */
   async function svLoadFrame(ll, buffered) {
     const my = ++svFrameSeq, fr = [$('#svFrame'), $('#svFrame2')];
-    let front = fr.find(f => f.dataset.front === '1'), back = fr.find(f => f !== front) || fr[0];
-    const direct = !buffered || !front;   // new spot chosen on the map: load straight into the frame the user is watching
-    if (direct) { back = front || fr[0]; front = null; back.dataset.front = '1'; back.style.zIndex = 2; fr.forEach(f => { if (f !== back) { f.style.zIndex = 1; f.dataset.front = '0'; } }); svMsg(''); }
-    const p = ll;   // load instantly; Google snaps to the nearest panorama itself
+    const front = fr.find(f => f.dataset.front === '1' && !f.hidden) || null;
+    const back = front ? fr.find(f => f !== front) : fr[0];
+    const p = ll;
+    svBusy = true; svMsg('');
+    fr.forEach(f => { if (f !== front) f.classList.remove('blur'); });
+    back.style.transition = 'none'; back.style.opacity = '1'; void back.offsetWidth; back.style.transition = '';
+    if (front) {
+      front.style.zIndex = 2; back.style.zIndex = 1; back.dataset.front = '0';
+      /* direct load: no blur, no loading label */
+    } else {
+      back.style.zIndex = 2; back.dataset.front = '0';
+      /* direct load: no placeholder */
+    }
     back.hidden = false;
-    /* onload only means the page arrived; Google then needs a moment to paint the panorama (that is the black).
-       So the hidden copy loads and paints behind the visible one, and is swapped in only after SV_PAINT_MS. */
-    const chip = $('#svWait'); if (front) chip.hidden = false;
+    const done = () => { svBusy = false; };
     back.onload = () => {
       if (my !== svFrameSeq) return;
-      setTimeout(() => {
+      setTimeout(() => {          // onload = page arrived; Google still needs a moment to paint the panorama
         if (my !== svFrameSeq) return;
-        back.style.zIndex = 2; back.dataset.front = '1';
-        if (front && front !== back) { front.style.zIndex = 1; front.dataset.front = '0'; }
-        svMsg(''); chip.hidden = true;
-      }, front ? SV_PAINT_MS : 0);
+        back.dataset.front = '1';
+        if (front && front !== back) {
+          front.dataset.front = '0';
+          back.style.transition = 'none'; back.style.opacity = '0'; back.style.zIndex = 3; void back.offsetWidth;
+          back.style.transition = ''; back.style.opacity = '1';  // cross-fade new 360° view in
+          setTimeout(() => { if (my === svFrameSeq) front.classList.remove('blur'); }, 420);
+        }
+        done();
+      }, SV_PAINT_MS);
     };
     back.src = 'https://maps.google.com/maps?layer=c&cbll=' + p.lat.toFixed(7) + ',' + p.lng.toFixed(7) + '&cbp=12,' + Math.round((svHeading % 360 + 360) % 360) + ',0,0,0&source=embed&output=svembed';
-    setTimeout(() => { if (my === svFrameSeq) { svMsg(''); chip.hidden = true; } }, 9000);
+    setTimeout(() => { if (my === svFrameSeq && svBusy) { fr.forEach(f => f.classList.remove('blur')); done(); } }, 9000);
     return p;
   }
   /* Mouse commands on the Street View drive the map symbol:
@@ -2074,7 +2573,7 @@ const GGCore = (function () {
       const r = t.getBoundingClientRect();
       d = { x: e.clientX, h: svHeading, moved: false, hold: false, back: (e.clientY - r.top) / r.height > 0.72, iv: null, ht: null };
       try { t.setPointerCapture(e.pointerId); } catch (err) {}
-      d.ht = setTimeout(() => { if (d && !d.moved) { d.hold = true; step(d.back ? -8 : 8); d.iv = setInterval(() => step(d.back ? -8 : 8), 900); } }, 450);
+      d.ht = setTimeout(() => { if (d && !d.moved) { d.hold = true; step(d.back ? -8 : 8); d.iv = setInterval(() => { if (!svBusy) step(d.back ? -8 : 8); }, 400); } }, 450);
     });
     t.addEventListener('pointermove', e => {
       if (!d) return;
@@ -2101,13 +2600,21 @@ const GGCore = (function () {
   })();
   $('#svCtl').addEventListener('click', () => { const t = $('#svTouch'), on = !t.classList.contains('on'); t.classList.toggle('on', on); $('#svCtl').classList.toggle('on', on); $('#svCtl').textContent = 'Map-sync: ' + (on ? 'ON' : 'OFF'); });
   function svOpenLink(ll) { $('#svOpen').href = 'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + ll.lat.toFixed(7) + ',' + ll.lng.toFixed(7); }
+  var svShowSeq = 0;
+  function svPending() {   // instant feedback on click: blur what is on screen while the exact spot is resolved
+    /* direct load: nothing shown while resolving */
+  }
   async function svShow(ll, buffered) {
     svLast = ll; svSplit(true); svSetMarker(ll); svOpenLink(ll);
     $('#svTitle').textContent = 'Street View · ' + ll.lat.toFixed(6) + ', ' + ll.lng.toFixed(6);
     setMsg('Street View: drag in the view to turn the map symbol, click to walk forward (bottom strip = back), hold to keep walking.');
-    svLoadFrame(ll, buffered);
-    const p = await svSnap(ll);
-    if (p && svMarker && !svDragging && svLast === ll) { svSetMarker(p); svLast = p; svOpenLink(p); $('#svTitle').textContent = 'Street View · ' + p.lat.toFixed(6) + ', ' + p.lng.toFixed(6); }
+    svPending();
+    const my = ++svShowSeq;
+    const p = await svSnap(ll);           // the blue symbol and the 360° picture must use the same coordinate
+    if (my !== svShowSeq) return;         // a newer click superseded this one
+    svLast = p; if (svMarker && !svDragging) svSetMarker(p);
+    svOpenLink(p); $('#svTitle').textContent = 'Street View · ' + p.lat.toFixed(6) + ', ' + p.lng.toFixed(6);
+    svLoadFrame(p, buffered);
   }
   function setSvMode(on) {
     if (on) { if (traceMode) setTraceMode(false); if (drawMode) setDrawMode(false); if (eTool) setEditTool(null); }
@@ -2742,6 +3249,7 @@ const GGCore = (function () {
     $('#areaPicked').disabled = !npk;
     $('#areaPickedNote').textContent = npk ? nf(npk) + ' selected feature' + (npk === 1 ? '' : 's') : 'Select features with the Select tool first';
     $('#areaTrace').nextElementSibling.querySelector('b').textContent = lyr.manual ? 'All features in layer' : 'Traced parcels';
+    $('#areaTrace').closest('label').hidden = !lyr.manual;
     if (lyr.manual) {
       $('#areaTrace').disabled = !hasTrace; $('#areaTraceNote').textContent = nf(lyr.sel.size) + ' feature' + (lyr.sel.size === 1 ? '' : 's') + ' drawn on this layer';
       if (!($('#areaPicked').checked && npk)) $('#areaTrace').checked = true;
@@ -2750,8 +3258,25 @@ const GGCore = (function () {
     $('#areaBox').disabled = !hasBox || !!lyr.manual;
     $('#areaBoxNote').textContent = hasBox ? 'The dashed orange box you drew on the map' : 'Use “Draw box” on the ribbon first';
     if ((!hasBox || lyr.manual) && $('#areaBox').checked) $('input[name=area][value=view]').checked = true;
-    updateFmtUi();
+    updateFmtUi(); renderExMulti();
   }
+  const exExtra = new Set();
+  function updateMultiUi() {
+    const n = 1 + Array.from(exExtra).filter(id => byId(id) && String(id) !== $('#exLayer').value).length;
+    $('#exMNote').textContent = n > 1 ? n + ' layers will be saved together in one .zip file' : 'only the layer above will be downloaded';
+    $('#exGo').textContent = n > 1 ? 'Download ' + n + ' layers' : 'Download';
+    $('#exName').disabled = n > 1;
+  }
+  function renderExMulti() {
+    const main = Number($('#exLayer').value), others = layers.filter(l => l.id !== main);
+    Array.from(exExtra).forEach(id => { if (!byId(id) || id === main) exExtra.delete(id); });
+    $('#exMultiWrap').hidden = !others.length;
+    $('#exMulti').innerHTML = others.map(l => '<label><input type="checkbox" data-id="' + l.id + '"' + (exExtra.has(l.id) ? ' checked' : '') + '><span>' + esc(l.name) + ' <small>' + (l.manual ? 'drawn/imported · ' + nf(l.sel.size) : (l.count != null ? nf(l.count) : '')) + ' features</small></span></label>').join('');
+    updateMultiUi();
+  }
+  $('#exMulti').addEventListener('change', e => { const id = Number(e.target.dataset.id); if (e.target.checked) exExtra.add(id); else exExtra.delete(id); updateMultiUi(); });
+  $('#exMAll').addEventListener('click', e => { e.preventDefault(); $$('#exMulti input').forEach(i => { i.checked = true; exExtra.add(Number(i.dataset.id)); }); updateMultiUi(); });
+  $('#exMNone').addEventListener('click', e => { e.preventDefault(); $$('#exMulti input').forEach(i => { i.checked = false; }); exExtra.clear(); updateMultiUi(); });
   function updateFmtUi() {
     const f = $('input[name=fmt]:checked').value;
     $('#exNameFieldWrap').hidden = !(f === 'kml' || f === 'kmz');
@@ -2795,6 +3320,7 @@ const GGCore = (function () {
   $('#exNoCap').addEventListener('change', () => { $('#exCap').disabled = $('#exNoCap').checked; });
   $('#exCount').addEventListener('click', async () => {
     const o = readExportForm(); if (!o.lyr) return;
+    if (Array.from(exExtra).some(id => byId(id) && id !== o.lyr.id)) { setExStatus('Several layers selected: each layer is downloaded in turn and the report inside the .zip lists the totals.', 'ok'); return; }
     if (o.area === 'trace' || o.area === 'picked') { const n = o.area === 'picked' ? o.lyr.picked.size : o.lyr.sel.size; setExStatus(nf(n) + ' feature' + (n === 1 ? '' : 's') + ' will be downloaded.', 'ok'); return; }
     setExStatus('Counting…'); busy(1);
     try {
@@ -2852,8 +3378,73 @@ const GGCore = (function () {
     $$('#exportModal input, #exportModal select').forEach(el => { el.disabled = on; });
     if (!on) syncExportForm();
   }
+  async function runMulti(ids, o) {
+    exportAbort = new AbortController(); const signal = exportAbort.signal;
+    setExportBusy(true); setExProgress(0); setExStatus('Preparing…'); busy(1);
+    const rawArea = $('input[name=area]:checked').value, used = new Set(), report = [];
+    try {
+      const zip = new JSZip(); let done = 0, totalFeats = 0;
+      for (let li = 0; li < ids.length; li++) {
+        const lyr = byId(ids[li]); if (!lyr) continue;
+        const base = frac => (li + frac) / ids.length;
+        try {
+          let feats, area = rawArea;
+          if (lyr.manual) feats = (rawArea === 'picked' && lyr.picked.size) ? Array.from(lyr.picked).map(k => featByKey(lyr, k)).filter(Boolean) : Array.from(lyr.sel.values());
+          else if (rawArea === 'trace' && lyr.sel.size) feats = Array.from(lyr.sel.values());
+          else if (rawArea === 'picked' && lyr.picked.size) feats = Array.from(lyr.picked).map(k => featByKey(lyr, k)).filter(Boolean);
+          else {
+            area = (rawArea === 'view' || rawArea === 'all' || (rawArea === 'box' && boxLayer)) ? rawArea : 'view';
+            const filter = filterParams(lyr, area, o.useWhere && !!lyr.where);
+            setExStatus('Layer ' + (li + 1) + ' of ' + ids.length + ' – “' + lyr.name + '”: counting…');
+            const c = await arcRequest(lyr.url + '/query', Object.assign({}, filter, { returnCountOnly: true }), signal);
+            const total = c.count || 0; if (!total) throw new Error('no features in this area');
+            const target = Math.min(total, o.cap);
+            feats = await fetchAll(lyr, filter, target, (d, t) => { setExProgress(base(0.85 * d / t) * 0.95); setExStatus('Layer ' + (li + 1) + ' of ' + ids.length + ' – “' + lyr.name + '”: ' + nf(d) + ' of ' + nf(t) + ' features…'); }, signal);
+            if (total > target) report.push(lyr.name + ': limited to ' + nf(target) + ' of ' + nf(total) + ' features');
+          }
+          if (!feats.length) throw new Error('no features to save');
+          setExStatus('Layer ' + (li + 1) + ' of ' + ids.length + ' – “' + lyr.name + '”: building ' + o.fmt.toUpperCase() + '…');
+          await new Promise(r => setTimeout(r, 20));
+          let nm = GGCore.sanitizeName(lyr.name), u = nm, c2 = 1; while (used.has(u.toLowerCase())) u = nm + '_' + (++c2); used.add(u.toLowerCase()); nm = u;
+          const st = lyr.style;
+          const strs = lyr.fields.filter(f => GGCore.fieldKind(f.type) === 'str');
+          const nameField = (lyr.fields.find(f => f.name === lyr.displayField) || strs[0] || lyr.fields[0] || {}).name;
+          if (o.fmt === 'shp') {
+            const files = GGCore.buildShapefile(feats, { name: nm, geometryType: lyr.geom, fields: lyr.fields }), dir = zip.folder(nm);
+            Object.keys(files).forEach(n => dir.file(n, files[n]));
+          } else if (o.fmt === 'kml' || o.fmt === 'kmz') {
+            const parts = GGCore.buildKml(feats, { name: lyr.name, fields: lyr.fields, nameField, lineColor: st.line, fillColor: st.fill, fillOpacity: st.fillOp });
+            const kml = new Blob(parts, { type: 'application/vnd.google-earth.kml+xml' });
+            if (o.fmt === 'kml') zip.file(nm + '.kml', kml);
+            else { const z2 = new JSZip(); z2.file('doc.kml', kml); zip.file(nm + '.kmz', await z2.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })); }
+          } else zip.file(nm + '.geojson', new Blob(GGCore.buildGeoJSONParts(feats), { type: 'application/geo+json' }));
+          done++; totalFeats += feats.length; report.push(lyr.name + ': ' + nf(feats.length) + ' features saved');
+        } catch (e) {
+          if (e && e.name === 'AbortError') throw e;
+          report.push(lyr.name + ': SKIPPED – ' + (e.message || e));
+        }
+        setExProgress(base(1) * 0.95);
+      }
+      if (!done) throw new Error('None of the selected layers had features to download. ' + report.join('; '));
+      zip.file('_download_report.txt', 'Layers downloaded as ' + o.fmt.toUpperCase() + ' on ' + new Date().toISOString() + '\r\n\r\n' + report.join('\r\n') + '\r\n');
+      setExStatus('Building the .zip file…');
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } }, m => setExProgress(0.95 + 0.05 * m.percent / 100));
+      const fileName = 'layers_' + o.fmt + '.zip';
+      setExProgress(1); download(blob, fileName);
+      const skipped = ids.length - done, msg = 'Saved ' + fileName + ' – ' + done + ' layer' + (done === 1 ? '' : 's') + ', ' + nf(totalFeats) + ' features, ' + (blob.size / 1048576).toFixed(1) + ' MB' + (skipped ? '. ' + skipped + ' skipped (see _download_report.txt inside).' : '.');
+      setExStatus(msg, skipped ? 'warn' : 'ok'); toast(msg, skipped ? 'warn' : '');
+    } catch (e) {
+      if (e && e.name === 'AbortError') { setExStatus('Stopped.', 'warn'); setExProgress(null); }
+      else { setExStatus(e.message || String(e), 'err'); setExProgress(null); toast('Download failed: ' + (e.message || e), 'err'); }
+    } finally { busy(-1); setExportBusy(false); exportAbort = null; }
+  }
   async function runExport() {
     const o = readExportForm(); if (!o.lyr) return;
+    const extra = Array.from(exExtra).filter(id => byId(id) && id !== o.lyr.id);
+    if (extra.length) {
+      if (typeof JSZip === 'undefined') { setExStatus('The ZIP library did not load (needs internet), so several layers cannot be bundled.', 'err'); return; }
+      return runMulti([o.lyr.id].concat(extra), o);
+    }
     if ((o.fmt === 'shp' || o.fmt === 'kmz') && typeof JSZip === 'undefined') { setExStatus('The ZIP library did not load (needs internet). KML and GeoJSON still work.', 'err'); return; }
     exportAbort = new AbortController(); const signal = exportAbort.signal;
     setExportBusy(true); setExProgress(0); setExStatus('Counting features…'); busy(1);
@@ -3034,6 +3625,25 @@ const GGCore = (function () {
   $('#urlInput').addEventListener('keydown', e => { if (e.key === 'Enter') addFromInput(); });
   $('#btnZoomLayer').addEventListener('click', () => { const l = activeLayer(); if (l) zoomToLayer(l); else toast('Add a layer first.', 'warn'); });
   $('#helpBtn').addEventListener('click', () => { $('#helpModal').hidden = false; });
+  $('#logoutBtn').addEventListener('click', () => { try { sessionStorage.removeItem('lg_unlocked'); } catch (e) {} location.reload(); });
+  (function wireContentsCollapse() {
+    const pane = $('#contents'), btn = $('#ctCollapse');
+    btn.addEventListener('click', () => {
+      const c = pane.classList.toggle('collapsed'); btn.textContent = c ? '›' : '‹';
+      setTimeout(() => map.invalidateSize(), 220);
+    });
+    $('#ctRail').addEventListener('click', () => btn.click());
+  })();
+  (function wireRibbonWheel() { /* mouse wheel scrolls the toolbar sideways */
+    const rb = $('.ribbon');
+    rb.addEventListener('wheel', e => {
+      if (rb.scrollWidth <= rb.clientWidth + 1) return;
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (!d) return;
+      const unit = e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? rb.clientWidth : 1;
+      e.preventDefault(); rb.scrollLeft += d * unit;
+    }, { passive: false });
+  })();
   $('#btnMenu').addEventListener('click', () => $('#contents').classList.toggle('open'));
   $$('.overlay').forEach(o => {
     o.addEventListener('mousedown', e => { if (e.target === o && !(o === exModal && exportRunning)) o.hidden = true; });
