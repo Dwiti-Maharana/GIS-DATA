@@ -378,6 +378,46 @@ html.unlocked #gate{display:none}
 .cp-opt input[type=radio]{margin-top:3px}
 .cp-opt > span{flex:1;min-width:0;display:grid;gap:6px}
 .cp-opt label.cp-chk{display:flex;gap:6px;align-items:center;font-size:12.5px;font-weight:400}
+#measPanel{position:absolute;left:56px;top:10px;z-index:1000;width:318px;max-width:calc(100% - 70px);max-height:calc(100% - 50px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 26px rgba(0,0,0,.28);font-size:13px;cursor:default}
+#measPanel h3{margin:0;padding:8px 10px;font-size:14px;background:#f0f3f1;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;position:sticky;top:0;z-index:2}
+#measPanel h3 span{flex:1}
+#measPanel .mp-x{border:0;background:transparent;font-size:17px;line-height:1;padding:2px 6px;border-radius:4px;color:var(--muted)}
+#measPanel .mp-x:hover{background:#dfe6e2}
+#measPanel .mp-b{padding:9px 10px;display:grid;gap:8px}
+#measPanel .mp-big{font-size:21px;font-weight:650;color:var(--accent-d);line-height:1.15}
+#measPanel .mp-sub{color:var(--muted);font-size:12px}
+#measPanel .mp-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#measPanel select{border:1px solid var(--line);border-radius:4px;padding:3px 4px;background:#fff;max-width:140px}
+#measPanel table{width:100%;border-collapse:collapse;font-size:12px}
+#measPanel td,#measPanel th{padding:2px 5px;border-bottom:1px solid #eef1ef;text-align:left;vertical-align:top}
+#measPanel td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+#measPanel tr.hl td{background:var(--accent-l);font-weight:600}
+#measPanel details summary{cursor:pointer;font-weight:600;font-size:12.5px}
+#measPanel .btn{padding:4px 9px;font-size:12.5px}
+#measPanel .mp-tab{max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:4px}
+#measPanel code{font:12px Consolas,monospace;word-break:break-all}
+.mlbl-wrap{pointer-events:none}
+.mlbl{display:inline-block;transform:translate(-50%,-50%);background:#fff;border:1px solid #0f766e;color:#0b3a36;border-radius:3px;padding:0 5px;font:600 11px/1.5 "Segoe UI",system-ui,sans-serif;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.mlbl.big{background:#0f766e;color:#fff;font-size:12px;padding:1px 7px}
+.mlbl.live{transform:translate(20px,16px)}
+.mlbl.live.l{transform:translate(calc(-100% - 20px),16px)}
+.mlbl.live.u{transform:translate(20px,calc(-100% - 16px))}
+.mlbl.live.l.u{transform:translate(calc(-100% - 20px),calc(-100% - 16px))}
+#measPanel h3{cursor:move;user-select:none;-webkit-user-select:none;touch-action:none}
+#measPanel h3 .mp-x{cursor:pointer}
+#measPanel.dragging{opacity:.92}
+/* ---------- PDF export ---------- */
+#pdfPrevWrap{background:#e9eeec;border:1px solid var(--line);border-radius:6px;padding:8px;text-align:center}
+#pdfPrev{max-width:100%;max-height:320px;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.25)}
+#pdfPrevMsg{font-size:12px;color:var(--muted);margin-top:5px}
+#pdfLayers{max-height:200px}
+.pl-row{display:flex;align-items:center;gap:4px;padding:1px 0}
+.pl-row label{flex:1;min-width:0}
+.pl-mv{border:1px solid var(--line);background:#fff;border-radius:4px;width:26px;height:24px;font-size:10px;padding:0;line-height:1}
+.pl-mv:hover{background:#f0f3f1}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.chk-row{display:flex;flex-wrap:wrap;gap:8px 18px}
+@media (max-width:560px){.row3{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -485,12 +525,26 @@ html.unlocked #gate{display:none}
       <button class="tool" id="btnVertex" data-tool="vertex" data-icon="vertex" title="Click a feature, then drag its dots to reshape it">Vertices</button>
       <button class="tool" id="btnAttr" data-icon="edit" title="Fill in the attribute fields of the selected features">Attributes</button>
       <button class="tool" id="btnDel" data-icon="trash" title="Delete the selected features (Delete key)">Delete</button>
+      <button class="tool" id="btnCopy" data-icon="copy" title="Copy the selected features (Ctrl+C)">Copy</button>
+      <button class="tool" id="btnPaste" data-icon="paste" title="Paste the copied features into the active editable layer (Ctrl+V). Makes a new layer if there is none of that type.">Paste</button>
+      <button class="tool" id="btnPasteTo" data-icon="paste" title="Paste the copied features into a layer you choose (Ctrl+Shift+V)">Paste to…</button>
       <button class="tool" id="btnUndo" data-icon="undo" title="Undo (Ctrl+Z)">Undo</button>
       <button class="tool" id="btnRedo" data-icon="redo" title="Redo (Ctrl+Y)">Redo</button>
     </div><div class="grp-cap" id="editCap">Select &amp; edit</div></div>
     <div class="grp"><div class="grp-btns">
+      <button class="tool" id="btnMDist" data-mt="distance" data-icon="ruler" title="Measure distance: click each point, double-click or Enter to finish">Distance</button>
+      <button class="tool" id="btnMArea" data-mt="area" data-icon="poly" title="Measure area and perimeter: click each corner, double-click or Enter to finish">Area</button>
+      <button class="tool" id="btnMCirc" data-mt="circle" data-icon="circ" title="Measure a circle: click the centre, then click the edge">Radius</button>
+      <button class="tool" id="btnMLoc" data-mt="location" data-icon="point" title="Click the map to get coordinates (decimal, DMS, UTM, Web Mercator)">Coordinates</button>
+      <button class="tool" id="btnMSel" data-icon="all" title="Area, perimeter and length of the selected features">Selected</button>
+      <button class="tool" id="btnMClear" data-icon="clear" title="Clear measurements">Clear</button>
+    </div><div class="grp-cap">Measure</div></div>
+    <div class="grp"><div class="grp-btns">
       <button class="tool" id="btnStreet" data-icon="street" title="Press, then click a road on the map. The screen splits and Google Street View opens on the right.">Street View</button>
     </div><div class="grp-cap">Street View</div></div>
+    <div class="grp"><div class="grp-btns">
+      <button class="tool dl" id="btnPdf" data-icon="pdf" title="Draw a box on the map, choose the layers, then save that area as a PDF map">Export PDF</button>
+    </div><div class="grp-cap">PDF map</div></div>
     <div class="grp"><div class="grp-btns">
       <button class="tool dl" data-export="shp" data-icon="down" title="Choose a layer, file format (Shapefile, KML, KMZ, GeoJSON) and area to download">Download</button>
     </div><div class="grp-cap">Download</div></div>
@@ -601,6 +655,41 @@ html.unlocked #gate{display:none}
   </div>
 </div>
 
+<!-- Export PDF dialog -->
+<div class="overlay" id="pdfModal" hidden>
+  <div class="modal" style="width:min(760px,100%)" role="dialog" aria-modal="true" aria-labelledby="pdfTitleH">
+    <div class="modal-head"><h2 id="pdfTitleH">Export map area to PDF</h2><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="modal-body">
+      <div id="pdfPrevWrap"><canvas id="pdfPrev" width="10" height="10"></canvas><div id="pdfPrevMsg">Preparing preview…</div></div>
+      <label class="fld"><span class="lbl">Map title</span><input type="text" id="pdfTitle" autocomplete="off" spellcheck="false"></label>
+      <div class="row3">
+        <label class="fld"><span class="lbl">Page size</span><select id="pdfPage"><option>A4</option><option>A3</option><option>A2</option><option>A5</option><option>Letter</option><option>Legal</option><option>Tabloid</option></select></label>
+        <label class="fld"><span class="lbl">Orientation</span><select id="pdfOrient"><option value="auto">Auto (fit the box)</option><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></label>
+        <label class="fld"><span class="lbl">Quality</span><select id="pdfDpi"><option value="100">Draft (100 dpi)</option><option value="150" selected>Standard (150 dpi)</option><option value="200">High (200 dpi)</option><option value="300">Print (300 dpi)</option></select></label>
+      </div>
+      <label class="fld"><span class="lbl">Basemap</span><select id="pdfBase"></select>
+        <span class="hint">Esri and OpenStreetMap basemaps can be saved. Google tiles block copying, so they show blank in the PDF.</span></label>
+      <div class="fld"><span class="lbl">Layers to include</span>
+        <div class="mlist" id="pdfLayers"></div>
+        <div class="hint">Top of the list is drawn on top. Untick a layer to leave it out of the PDF. Use ▲ ▼ to change the order.</div>
+      </div>
+      <div class="chk-row">
+        <label class="chk"><input type="checkbox" id="pdfLegend" checked><span>Legend</span></label>
+        <label class="chk"><input type="checkbox" id="pdfScale" checked><span>Scale bar &amp; north arrow</span></label>
+        <label class="chk"><input type="checkbox" id="pdfLabels" checked><span>Feature labels</span></label>
+      </div>
+      <div class="ex-status" id="pdfStatus" role="status"></div>
+      <div class="bar" id="pdfBarWrap" hidden><div id="pdfBar"></div></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="pdfRedraw" title="Close this and draw the box again">Redraw box</button>
+      <span class="sp"></span>
+      <button class="btn" id="pdfCancel">Close</button>
+      <button class="btn primary" id="pdfGo">Export PDF</button>
+    </div>
+  </div>
+</div>
+
 <!-- Field list dialog -->
 <div class="overlay" id="infoModal" hidden>
   <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
@@ -634,6 +723,8 @@ html.unlocked #gate{display:none}
         <li>Use <b>Definition query</b> on the layer card to filter, for example <code>municipality = 'OAK PARK'</code>. The <b>Attribute table</b> lists what is loaded in the current view.</li>
         <li>Press <b>Download</b>. Choose the file format (Shapefile, KML, KMZ or GeoJSON), then the map view, a box you drew, or the entire layer, then press <b>Download</b>. Tick “Download every matching feature” to remove the size limit entirely and fetch everything that matches, however many features that is — for a county-wide parcel layer this can be a large file and take a while, since ArcGIS servers only return a few thousand features per request.</li>
         <li><b>Editable layers (draw your own parcels, lines and points):</b> press <b>New layer</b> to choose Polygon, Line or Point and set its attribute fields, or just pick a tool in <b>Draw</b> and a layer is created for you. Polygon/Line: click each corner, then double-click (or press Enter) to finish; corners snap to nearby ones. Point: click once. Tick “Ask for fields after drawing” to fill in the attributes straight away.</li>
+        <li><b>Measure:</b> in the <b>Measure</b> group choose <b>Distance</b> (length, azimuth and bearing of every segment), <b>Area</b> (area and perimeter), <b>Radius</b> (radius, diameter, circumference, area), <b>Coordinates</b> (decimal degrees, DMS, UTM, Web Mercator) or <b>Selected</b> (totals and per-feature area, perimeter or length of the selected features). Click points on the map; double-click or Enter finishes, Backspace removes the last point, Esc clears. Pick your length and area units (feet, meters, miles, acres, hectares, guntas, cents, gaj and more) in the panel; every unit is also listed. <b>Copy results</b> puts the numbers on the clipboard and <b>Save as feature…</b> adds the shape to an editable layer.</li>
+        <li><b>Copy &amp; paste:</b> select features, then press <b>Ctrl+C</b> (or the Copy button). <b>Ctrl+V</b> pastes into the active editable layer of the same type (a new layer is made if there is none). <b>Ctrl+Shift+V</b> (or <b>Paste to…</b>) lets you choose an existing layer or a new one. Online layers can be copied too, then edited once pasted.</li>
         <li><b>Select &amp; edit:</b> <b>Select</b> clicks a feature (Shift adds) or drags a box; <b>Move</b> drags features; <b>Vertices</b> lets you drag a feature’s dots, drag a pale middle dot to add a corner, and right-click a dot to delete it; <b>Attributes</b> jumps to the Attributes pane on the right, which edits one feature or all selected features at once (pick “All N features” in its list; fields showing ‹multiple values› differ, and only fields you change are updated); <b>Delete</b>, <b>Undo</b> (Ctrl+Z) and <b>Redo</b> (Ctrl+Y) work as you’d expect. In the attribute table, click a row to select it and double-click a cell to edit it. <b>Edit fields</b> adds, renames or removes attribute fields. Area, length and coordinates are filled in automatically.</li>
         <li><b>Rename a layer</b> with the Rename button on its card in Contents (or double-click its name). Hand-drawn layers are auto-saved in this browser and come back when you reopen the page; use <b>Download drawn</b> (all features, or just the selected ones) to keep a real file.</li>
         <li><b>Street View:</b> press <b>Street View</b> on the ribbon, then click a road on the map. The screen splits and Google Street View opens on the right, with a Google-style blue dot and view cone on the map showing where you are and which way you face. Drag that dot along the road to move Street View with it (it snaps to the nearest road), or click elsewhere to jump, drag the grey bar between the two halves to resize, and press ✕ to close. Paste a Google Maps API key (Maps JavaScript API) into the ribbon box for the full interactive view where the marker follows you as you move along the road; without a key a basic embedded view is used. The key is kept only in this browser.</li>
@@ -727,8 +818,8 @@ html.unlocked #gate{display:none}
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cpTitle" style="width:min(540px,100%)">
     <div class="modal-head"><h2 id="cpTitle">Copy to an editable layer</h2><button class="x" data-close aria-label="Close">×</button></div>
     <div class="modal-body">
-      <label class="fld"><span class="lbl">Copy from</span><select id="cpSrc"></select></label>
-      <div class="fld"><span class="lbl">Which features</span>
+      <label class="fld" id="cpFromFld"><span class="lbl">Copy from</span><select id="cpSrc"></select></label>
+      <div class="fld" id="cpScopeFld"><span class="lbl">Which features</span>
         <label class="cp-opt" id="cpOptSel"><input type="radio" name="cpScope" value="sel"><span id="cpScopeSel"></span></label>
         <label class="cp-opt" id="cpOptAll"><input type="radio" name="cpScope" value="all"><span id="cpScopeAll"></span></label>
         <div class="hint" id="cpScopeHint"></div>
@@ -750,6 +841,7 @@ html.unlocked #gate{display:none}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
 
 <!-- ============================ EXPORT CORE (no DOM) ============================ -->
@@ -1153,6 +1245,7 @@ const GGCore = (function () {
 
   /* ---------- small UI helpers ---------- */
   const ICONS = {
+    pdf: '<svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4"/><path d="M9 12h6M9 15h6M9 18h4"/></svg>',
     target: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>',
     table: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 10h18M3 15h18M9 4v16"/></svg>',
     box: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" stroke-dasharray="3 2.5"/></svg>',
@@ -1175,6 +1268,9 @@ const GGCore = (function () {
     poly: '<svg viewBox="0 0 24 24"><path d="M5 6l9-2 5 8-4 8-9-3z"/><circle cx="5" cy="6" r="1.4"/><circle cx="14" cy="4" r="1.4"/><circle cx="19" cy="12" r="1.4"/><circle cx="15" cy="20" r="1.4"/><circle cx="6" cy="17" r="1.4"/></svg>',
     undo: '<svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5M4 12h10a6 6 0 0 1 0 12" transform="translate(0 -3)"/></svg>',
     street: '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.4"/><path d="M12 8v6M8 10l4 1 4-1M12 14l-3 7M12 14l3 7"/></svg>',
+    ruler: '<svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg>',
+    circ: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12h8"/><circle cx="12" cy="12" r="1.2"/></svg>',
+    paste: '<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="1.5"/><path d="M9 5V3.5h6V5M9 11h6M9 15h6"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></svg>',
     trace: '<svg viewBox="0 0 24 24"><path d="M4 18c3-8 6 2 9-5s4-5 7-9"/><circle cx="4" cy="18" r="1.6"/></svg>'
   };
@@ -1349,6 +1445,7 @@ const GGCore = (function () {
 
   /* ---------- draw box ---------- */
   function setDrawMode(on) {
+    if (on && measureMode) setMeasure(null);
     if (on && traceMode) setTraceMode(false);
     if (on && hand) setHandMode(false);
     if (on && svMode) setSvMode(false);
@@ -1371,6 +1468,7 @@ const GGCore = (function () {
     if (!drawMode || !boxStart) return;
     const b = boxLayer.getBounds(); boxStart = null; setDrawMode(false);
     if (b.getNorth() === b.getSouth() || b.getEast() === b.getWest()) { clearBox(); return; }
+    if (pdfFlow) { pdfFlow = false; openPdf(b); return; }
     setMsg('Box drawn. Choose a download format and select “Drawn box”.');
     toast('Box drawn. Press Download and choose “Drawn box”.');
   });
@@ -1394,6 +1492,7 @@ const GGCore = (function () {
     const n = selTotal();
   }
   function setTraceMode(on) {
+    if (on && measureMode) setMeasure(null);
     if (on && drawMode) setDrawMode(false);
     if (on && hand) setHandMode(false);
     if (on && svMode) setSvMode(false);
@@ -1476,6 +1575,7 @@ const GGCore = (function () {
   }
 
   /* ---------- editable layers: draw polygon/line/point, select, move, edit vertices, attributes ---------- */
+  var measureMode = null;
   let eTool = null, undoStack = [], redoStack = [], saveTimer = null, saveWarned = false;
   const GT = { polygon: 'esriGeometryPolygon', line: 'esriGeometryPolyline', point: 'esriGeometryPoint' };
   const GNAME = { polygon: 'Polygons', line: 'Lines', point: 'Points' };
@@ -1594,7 +1694,7 @@ const GGCore = (function () {
     return (lyr.pcache && lyr.pcache.get(k)) || null;
   }
   function featClick(lyr, e) {
-    if (drawMode || traceMode || svMode || hand) return;
+    if (drawMode || traceMode || svMode || hand || measureMode) return;
     const f = e.layer && e.layer.feature; if (!f) return;
     lastFeatClick = Date.now();
     const oe = e.originalEvent || {}, add = oe.shiftKey || oe.ctrlKey || oe.metaKey;
@@ -1831,6 +1931,7 @@ const GGCore = (function () {
     vertex: 'Vertices: click a feature, then drag its dots to reshape it. Drag a pale middle dot to add a corner; right-click or double-click a dot to delete it.'
   };
   function setEditTool(t) {
+    if (t && measureMode) setMeasure(null);
     if (t) { if (traceMode) setTraceMode(false); if (drawMode) setDrawMode(false); if (svMode) setSvMode(false); }
     eTool = t; hand = !!t; handPts = []; handPrev.clearLayers();
     $$('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
@@ -1851,6 +1952,7 @@ const GGCore = (function () {
     $('#btnHandDl').disabled = !nfeat; $('#btnHandClear').disabled = !nfeat;
     $('#btnFields').disabled = !am; $('#btnSelAll').disabled = !nfeat;
     $('#btnAttr').disabled = !np; $('#btnDel').disabled = !np; $('#btnSelClear').disabled = !np;
+    $('#btnCopy').disabled = !np; $('#btnPaste').disabled = !cpClip; $('#btnPasteTo').disabled = !cpClip;
     $('#btnUndo').disabled = !undoStack.length && !handPts.length; $('#btnRedo').disabled = !redoStack.length;
     $('#editCap').textContent = am ? am.name + ': ' + nfeat + (np ? ' · ' + np + ' selected' : '') : 'Select & edit';
   }
@@ -1989,6 +2091,8 @@ const GGCore = (function () {
     const ctrl = e.ctrlKey || e.metaKey, k = (e.key || '').toLowerCase();
     if (ctrl && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if (ctrl && k === 'y') { e.preventDefault(); redo(); return; }
+    if (ctrl && k === 'c' && !e.shiftKey && pickedLayer() && !String(window.getSelection() || '')) { e.preventDefault(); cpCopySelected(); return; }
+    if (ctrl && k === 'v') { e.preventDefault(); if (e.shiftKey) cpPasteTo(); else cpPaste(); return; }
     if (e.key === 'Escape' && !hand && pickedLayer()) { clearPicks(); return; }
     if (!hand) return;
     if (e.key === 'Enter' && handPts.length) { e.preventDefault(); finishDraw(); }
@@ -2794,6 +2898,7 @@ const GGCore = (function () {
     svLoadFrame(p, buffered);
   }
   function setSvMode(on) {
+    if (on && measureMode) setMeasure(null);
     if (on) { if (traceMode) setTraceMode(false); if (drawMode) setDrawMode(false); if (eTool) setEditTool(null); }
     svMode = on;
     $('#btnStreet').classList.toggle('on', on);
@@ -3516,7 +3621,7 @@ const GGCore = (function () {
   }
   map.on('click', e => {
     hi.clearLayers();
-    if (drawMode || traceMode || svMode || hand) return;
+    if (drawMode || traceMode || svMode || hand || measureMode) return;
     if (Date.now() - lastFeatClick < 120) return;
     const oe = e.originalEvent; if (oe && (oe.shiftKey || oe.ctrlKey || oe.metaKey)) return;
     if (pickedLayer()) clearPicks();
@@ -3793,6 +3898,362 @@ const GGCore = (function () {
   $('#exGo').addEventListener('click', runExport);
   $('#exCancel').addEventListener('click', () => { if (exportRunning && exportAbort) exportAbort.abort(); else exModal.hidden = true; });
 
+  /* ---------- export a drawn map area to PDF ---------- */
+  let pdfFlow = false, pdfBounds = null, pdfData = {}, pdfAbort = null, pdfRunning = false, pdfToken = 0, pdfOrder = [], pdfTimer = null;
+  const pdfInc = new Set(), pdfTiles = new Map();
+  const pdfModal = $('#pdfModal');
+  const PDF_PAGES = { A4: [210, 297], A3: [297, 420], A2: [420, 594], A5: [148, 210], Letter: [215.9, 279.4], Legal: [215.9, 355.6], Tabloid: [279.4, 431.8] };
+  const PDF_CAP = 30000, MERC = 6378137, WORLD = 40075016.685578;
+  const pdfMx = lng => MERC * lng * Math.PI / 180;
+  const pdfMy = lat => MERC * Math.log(Math.tan(Math.PI / 4 + Math.max(-85.05, Math.min(85.05, lat)) * Math.PI / 360));
+  const pdfTxt = s => String(s == null ? '' : s).replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[\u2013\u2014]/g, '-').replace(/[^\u0020-\u00FF]/g, '?');
+  const pdfAbortErr = () => new DOMException('Stopped', 'AbortError');
+  const pdfYield = () => new Promise(r => setTimeout(r, 0));
+
+  $('#pdfBase').innerHTML = '<option value="">None (white background)</option>' + Object.keys(BASEMAPS).map(k => '<option>' + esc(k) + '</option>').join('');
+
+  /* 1. ribbon button: ask for a box */
+  $('#btnPdf').addEventListener('click', () => {
+    clearBox(); setDrawMode(true); pdfFlow = true;
+    setMsg('Export PDF: press and drag on the map to draw the area you want in the PDF. Esc cancels.');
+    toast('Draw a box around the area you want to export.');
+  });
+  $('#btnDraw').addEventListener('click', () => { pdfFlow = false; });
+  $('#btnClearBox').addEventListener('click', () => { pdfFlow = false; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') pdfFlow = false; });
+
+  /* 2. dialog */
+  function setPdfStatus(t, kind) { const s = $('#pdfStatus'); s.textContent = t; s.className = 'ex-status ' + (kind || ''); }
+  function setPdfProgress(p) { $('#pdfBarWrap').hidden = p === null; if (p !== null) $('#pdfBar').style.width = Math.round(p * 100) + '%'; }
+  function openPdf(b) {
+    pdfBounds = b; pdfData = {}; pdfTiles.clear();
+    pdfOrder = layers.slice().reverse().map(l => l.id);
+    pdfInc.clear();
+    const vis = layers.filter(l => l.visible);
+    (vis.length ? vis : layers).forEach(l => pdfInc.add(l.id));
+    const a = activeLayer();
+    $('#pdfTitle').value = a ? a.name : 'Map extract';
+    let bm = bsel.value;
+    if (/^Google/.test(bm)) bm = /Satellite|Hybrid/.test(bm) ? 'Esri Imagery' : 'Esri Streets';
+    $('#pdfBase').value = bm;
+    renderPdfLayers(); setPdfStatus(''); setPdfProgress(null);
+    $('#pdfPrevMsg').textContent = 'Preparing preview…';
+    pdfModal.hidden = false;
+    pdfRefresh();
+  }
+  function renderPdfLayers() {
+    $('#pdfLayers').innerHTML = pdfOrder.map(id => {
+      const l = byId(id); if (!l) return '';
+      return '<div class="pl-row"><label><input type="checkbox" data-pl="' + id + '"' + (pdfInc.has(id) ? ' checked' : '') + '><span>' + esc(l.name) + ' <small>' + (l.manual ? 'drawn / imported' : 'online layer') + '</small></span></label>' +
+        '<button type="button" class="pl-mv" data-id="' + id + '" data-mv="-1" title="Move up (draw on top)">▲</button><button type="button" class="pl-mv" data-id="' + id + '" data-mv="1" title="Move down">▼</button></div>';
+    }).join('') || '<div class="hint" style="padding:6px">No layers on the map yet. The PDF will contain only the basemap.</div>';
+  }
+  $('#pdfLayers').addEventListener('change', e => {
+    const id = Number(e.target.dataset.pl); if (!id) return;
+    if (e.target.checked) pdfInc.add(id); else pdfInc.delete(id);
+    pdfSoon();
+  });
+  $('#pdfLayers').addEventListener('click', e => {
+    const b = e.target.closest('[data-mv]'); if (!b) return;
+    const id = Number(b.dataset.id), i = pdfOrder.indexOf(id), j = i + Number(b.dataset.mv);
+    if (i < 0 || j < 0 || j >= pdfOrder.length) return;
+    pdfOrder.splice(i, 1); pdfOrder.splice(j, 0, id);
+    renderPdfLayers(); pdfSoon();
+  });
+  ['pdfPage', 'pdfOrient', 'pdfBase', 'pdfLegend', 'pdfScale', 'pdfLabels'].forEach(id => $('#' + id).addEventListener('change', pdfSoon));
+  function pdfSoon() { if (pdfRunning) return; clearTimeout(pdfTimer); pdfTimer = setTimeout(pdfRefresh, 200); }
+  $('#pdfRedraw').addEventListener('click', () => {
+    if (pdfRunning) return;
+    pdfModal.hidden = true; clearBox(); setDrawMode(true); pdfFlow = true;
+    setMsg('Export PDF: draw the box again.');
+  });
+  $('#pdfCancel').addEventListener('click', () => { pdfModal.hidden = true; });
+  new MutationObserver(() => {
+    if (!pdfModal.hidden) return;
+    pdfToken++; clearTimeout(pdfTimer);
+    if (pdfAbort) pdfAbort.abort();
+    pdfRunning = false; setPdfBusy(false);
+    if (!pdfFlow) clearBox();
+  }).observe(pdfModal, { attributes: true, attributeFilter: ['hidden'] });
+  function setPdfBusy(on) {
+    $('#pdfGo').disabled = on; $('#pdfRedraw').disabled = on;
+    $('#pdfGo').textContent = on ? 'Building PDF…' : 'Export PDF';
+  }
+
+  function pdfOpts() {
+    return {
+      title: $('#pdfTitle').value.trim(), page: $('#pdfPage').value, orient: $('#pdfOrient').value, dpi: Number($('#pdfDpi').value) || 150,
+      basemap: $('#pdfBase').value, legend: $('#pdfLegend').checked, scalebar: $('#pdfScale').checked, labels: $('#pdfLabels').checked,
+      ids: pdfOrder.filter(id => pdfInc.has(id) && byId(id))   // top → bottom
+    };
+  }
+  function pdfLayout(o) {
+    const b = pdfBounds, bw = pdfMx(b.getEast()) - pdfMx(b.getWest()), bh = pdfMy(b.getNorth()) - pdfMy(b.getSouth());
+    const pg = PDF_PAGES[o.page] || PDF_PAGES.A4;
+    const land = o.orient === 'landscape' || (o.orient === 'auto' && bw >= bh);
+    const pw = land ? pg[1] : pg[0], ph = land ? pg[0] : pg[1], m = 10;
+    const titleH = o.title ? 13 : 0, n = o.ids.length;
+    const cols = Math.max(1, Math.floor((pw - 2 * m) / 58)), rows = Math.ceil(n / cols);
+    const legendH = (o.legend && n) ? 8 + rows * 6.5 : 0, footH = 7;
+    const frameW = pw - 2 * m, frameH = Math.max(30, ph - 2 * m - titleH - legendH - footH);
+    return { land, pw, ph, m, titleH, legendH, footH, cols, rows, frameW, frameH };
+  }
+
+  /* 3. get the features of one layer inside the box */
+  function pdfFilter(lyr, b) {
+    return { where: lyr.where || '1=1', geometry: [clampLng(b.getWest()), clampLat(b.getSouth()), clampLng(b.getEast()), clampLat(b.getNorth())].join(','), geometryType: 'esriGeometryEnvelope', inSR: 4326, spatialRel: 'esriSpatialRelIntersects' };
+  }
+  async function pdfLoad(lyr, sig) {
+    if (lyr.manual) return { features: Array.from(lyr.sel.values()), total: lyr.sel.size };
+    if (pdfData[lyr.id]) return pdfData[lyr.id];
+    const filter = pdfFilter(lyr, pdfBounds);
+    setPdfStatus('Loading “' + lyr.name + '”…');
+    const c = await arcRequest(lyr.url + '/query', Object.assign({}, filter, { returnCountOnly: true }), sig);
+    const total = c.count || 0, target = Math.min(total, PDF_CAP);
+    const feats = target ? await fetchAll(lyr, filter, target, (d, t) => setPdfStatus('Loading “' + lyr.name + '”: ' + nf(d) + ' of ' + nf(t) + ' features…'), sig) : [];
+    return (pdfData[lyr.id] = { features: feats, total });
+  }
+  async function pdfRefresh() {
+    const tok = ++pdfToken;
+    if (pdfAbort) pdfAbort.abort();
+    const ac = pdfAbort = new AbortController();
+    busy(1);
+    try {
+      const o = pdfOpts(), notes = [];
+      for (const id of o.ids) {
+        if (tok !== pdfToken) return;
+        const l = byId(id), d = await pdfLoad(l, ac.signal);
+        if (d.total > d.features.length) notes.push('“' + l.name + '” has ' + nf(d.total) + ' features in this box; only the first ' + nf(d.features.length) + ' are drawn.');
+        else if (!d.total && !l.manual) notes.push('“' + l.name + '” has no features inside this box.');
+      }
+      if (tok !== pdfToken) return;
+      setPdfStatus(notes.join(' '), notes.length ? 'warn' : '');
+      await pdfPreview(tok, ac.signal);
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+      if (tok === pdfToken) setPdfStatus(e.message || String(e), 'err');
+    } finally { busy(-1); }
+  }
+  async function pdfPreview(tok, sig) {
+    const o = pdfOpts(), lay = pdfLayout(o), dpi = 70;
+    const r = await pdfRender({ o, lay, wpx: Math.round(lay.frameW / 25.4 * dpi), hpx: Math.round(lay.frameH / 25.4 * dpi), stale: () => tok !== pdfToken || sig.aborted });
+    if (tok !== pdfToken) return;
+    const pc = $('#pdfPrev'); pc.width = r.canvas.width; pc.height = r.canvas.height; pc.getContext('2d').drawImage(r.canvas, 0, 0);
+    let msg = o.page + ' ' + (lay.land ? 'landscape' : 'portrait') + ' · approx. 1:' + nf(Math.round(r.scale));
+    if (r.tiles && r.failed) msg += r.failed === r.tiles ? ' · basemap could not be loaded (server blocks copying). Pick an Esri or OpenStreetMap basemap.' : ' · ' + r.failed + ' basemap tiles failed to load.';
+    $('#pdfPrevMsg').textContent = msg;
+  }
+
+  /* 4. drawing */
+  function pdfTile(url) {
+    if (!pdfTiles.has(url)) pdfTiles.set(url, new Promise(res => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = url; }));
+    return pdfTiles.get(url);
+  }
+  function pdfPtPath(ctx, shape, x, y, s) {
+    const h = s / 2; ctx.beginPath();
+    if (shape === 'square') ctx.rect(x - h, y - h, s, s);
+    else if (shape === 'diamond') { ctx.moveTo(x, y - h); ctx.lineTo(x + h, y); ctx.lineTo(x, y + h); ctx.lineTo(x - h, y); ctx.closePath(); }
+    else if (shape === 'triangle') { ctx.moveTo(x, y - h); ctx.lineTo(x + h, y + h); ctx.lineTo(x - h, y + h); ctx.closePath(); }
+    else if (shape === 'star') { for (let i = 0; i < 10; i++) { const r = i % 2 ? h * 0.45 : h * 1.05, a = -Math.PI / 2 + i * Math.PI / 5; i ? ctx.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)) : ctx.moveTo(x + r * Math.cos(a), y + r * Math.sin(a)); } ctx.closePath(); }
+    else if (shape === 'cross' || shape === 'x') {
+      const t = s / 6, P = [[-t, -h], [t, -h], [t, -t], [h, -t], [h, t], [t, t], [t, h], [-t, h], [-t, t], [-h, t], [-h, -t], [-t, -t]], ca = shape === 'x' ? Math.SQRT1_2 : 1, sa = shape === 'x' ? Math.SQRT1_2 : 0;
+      P.forEach((p, i) => { const px = x + p[0] * ca - p[1] * sa, py = y + p[0] * sa + p[1] * ca; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }); ctx.closePath();
+    } else ctx.arc(x, y, h, 0, Math.PI * 2);
+  }
+  function pdfSetStroke(ctx, st, k) {
+    ctx.strokeStyle = st.line; ctx.lineWidth = Math.max(0.5, st.weight * k); ctx.globalAlpha = st.lineOp == null ? 1 : st.lineOp;
+    const da = dashArr(st.dash, st.weight); ctx.setLineDash(da ? da.split(',').map(v => Number(v) * k) : []);
+    ctx.lineCap = st.dash === 'dot' ? 'round' : 'butt';
+  }
+  function pdfDrawPoint(ctx, lyr, x, y, k) {
+    const st = lyr.style, s = ptSize(lyr) * k;
+    pdfPtPath(ctx, st.shape || 'circle', x, y, s);
+    ctx.globalAlpha = st.fillOp == null ? 0.9 : st.fillOp; ctx.fillStyle = st.fill; ctx.fill();
+    ctx.setLineDash([]); pdfSetStroke(ctx, Object.assign({}, st, { dash: null }), k); ctx.stroke();
+  }
+  function pdfGeom(ctx, lyr, g, P, k) {
+    const st = lyr.style;
+    if (!g) return;
+    if (g.type === 'GeometryCollection') { g.geometries.forEach(x => pdfGeom(ctx, lyr, x, P, k)); return; }
+    const t = g.type, c = g.coordinates;
+    if (t === 'Point') { const p = P(c); pdfDrawPoint(ctx, lyr, p[0], p[1], k); }
+    else if (t === 'MultiPoint') c.forEach(q => { const p = P(q); pdfDrawPoint(ctx, lyr, p[0], p[1], k); });
+    else if (t === 'LineString' || t === 'MultiLineString') {
+      ctx.beginPath(); (t === 'LineString' ? [c] : c).forEach(ln => ln.forEach((q, i) => { const p = P(q); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }));
+      pdfSetStroke(ctx, st, k); ctx.stroke();
+    } else if (t === 'Polygon' || t === 'MultiPolygon') {
+      ctx.beginPath(); (t === 'Polygon' ? [c] : c).forEach(poly => poly.forEach(ring => { ring.forEach((q, i) => { const p = P(q); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }); ctx.closePath(); }));
+      if (st.fillOp > 0) { ctx.globalAlpha = st.fillOp; ctx.fillStyle = st.fill; ctx.fill('evenodd'); }
+      if (st.weight > 0) { pdfSetStroke(ctx, st, k); ctx.stroke(); }
+    }
+  }
+  function pdfAnchor(g, P) {
+    if (!g) return null;
+    if (g.type === 'Point') return P(g.coordinates);
+    if (g.type === 'MultiPoint') return g.coordinates.length ? P(g.coordinates[0]) : null;
+    if (g.type === 'LineString') return P(g.coordinates[g.coordinates.length >> 1]);
+    if (g.type === 'MultiLineString') { const l = g.coordinates[0]; return l && P(l[l.length >> 1]); }
+    const ring = g.type === 'Polygon' ? g.coordinates[0] : g.type === 'MultiPolygon' ? g.coordinates[0][0] : null;
+    if (!ring || !ring.length) return null;
+    let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+    ring.forEach(q => { a = Math.min(a, q[0]); c = Math.max(c, q[0]); b = Math.min(b, q[1]); d = Math.max(d, q[1]); });
+    return P([(a + c) / 2, (b + d) / 2]);
+  }
+  function pdfLabels(ctx, lyr, feats, P, k, W, H) {
+    const flds = lyr.labelFields || []; if (!flds.length) return;
+    let n = 0; ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.lineJoin = 'round';
+    for (const f of feats) {
+      if (n > 3000) break;
+      const a = pdfAnchor(f.geometry, P); if (!a || a[0] < 0 || a[1] < 0 || a[0] > W || a[1] > H) continue;
+      const pt = f.geometry.type === 'Point' || f.geometry.type === 'MultiPoint', lines = [];
+      flds.forEach(nm => { const v = f.properties && f.properties[nm]; if (v !== null && v !== undefined && String(v).trim() !== '') lines.push({ t: String(v), s: Object.assign(defLS(), (lyr.labelStyles || {})[nm] || {}) }); });
+      if (!lines.length) continue; n++;
+      let y = a[1] - (lines.reduce((s, l) => s + l.s.size * k * 1.15, 0) / 2) + (pt ? 0 : 0);
+      lines.forEach(l => {
+        const sz = l.s.size * k; ctx.font = (l.s.italic ? 'italic ' : '') + (l.s.bold ? '700 ' : '400 ') + sz + 'px "' + l.s.font + '","Segoe UI",sans-serif';
+        ctx.textAlign = pt ? 'left' : 'center'; ctx.textBaseline = 'top';
+        const x = pt ? a[0] + 8 * k : a[0];
+        ctx.lineWidth = Math.max(2, sz / 4); ctx.strokeStyle = lumOf(l.s.color) > 0.6 ? '#000' : '#fff'; ctx.strokeText(l.t, x, y);
+        ctx.fillStyle = l.s.color; ctx.fillText(l.t, x, y); y += sz * 1.15;
+      });
+    }
+  }
+  async function pdfRender(a) {
+    const o = a.o, b = pdfBounds, wpx = Math.max(50, a.wpx), hpx = Math.max(50, a.hpx), k = (a.dpi || (wpx / (a.lay.frameW / 25.4))) / 96;
+    const x0 = pdfMx(b.getWest()), x1 = pdfMx(b.getEast()), y0 = pdfMy(b.getSouth()), y1 = pdfMy(b.getNorth());
+    const mpp = ((x1 - x0) / (y1 - y0) > wpx / hpx) ? (x1 - x0) / wpx : (y1 - y0) / hpx;
+    const left = (x0 + x1) / 2 - mpp * wpx / 2, top = (y0 + y1) / 2 + mpp * hpx / 2;
+    const P = q => [(pdfMx(q[0]) - left) / mpp, (top - pdfMy(q[1])) / mpp];
+    const cv = document.createElement('canvas'); cv.width = wpx; cv.height = hpx;
+    const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, wpx, hpx); ctx.lineJoin = 'round';
+    const res = { canvas: cv, mpp, tiles: 0, failed: 0, attrib: [] };
+    res.realPerMm = mpp * Math.cos(((b.getNorth() + b.getSouth()) / 2) * Math.PI / 180) * wpx / a.lay.frameW;
+    res.scale = res.realPerMm * 1000;
+    const stale = () => { if (a.stale && a.stale()) throw pdfAbortErr(); };
+    if (o.basemap && BASEMAPS[o.basemap]) {
+      const bl = BASEMAPS[o.basemap](), tls = bl instanceof L.TileLayer ? [bl] : bl.getLayers().filter(l => l instanceof L.TileLayer);
+      for (const tl of tls) {
+        if (tl.options.attribution && res.attrib.indexOf(tl.options.attribution) < 0) res.attrib.push(tl.options.attribution);
+        let z = Math.min(tl.options.maxNativeZoom || tl.options.maxZoom || 19, Math.max(0, Math.ceil(Math.log2(156543.03392 / mpp)))), rng;
+        for (;;) {
+          const S = WORLD / Math.pow(2, z), n = Math.pow(2, z) - 1;
+          rng = { S, tx0: Math.max(0, Math.floor((left + WORLD / 2) / S)), tx1: Math.min(n, Math.floor((left + mpp * wpx + WORLD / 2) / S)), ty0: Math.max(0, Math.floor((WORLD / 2 - top) / S)), ty1: Math.min(n, Math.floor((WORLD / 2 - (top - mpp * hpx)) / S)) };
+          if ((rng.tx1 - rng.tx0 + 1) * (rng.ty1 - rng.ty0 + 1) <= 160 || z <= 0) break; z--;
+        }
+        const jobs = [], sub = tl.options.subdomains;
+        for (let ty = rng.ty0; ty <= rng.ty1; ty++) for (let tx = rng.tx0; tx <= rng.tx1; tx++) {
+          const s = typeof sub === 'string' || Array.isArray(sub) ? sub[(tx + ty) % sub.length] : 'a';
+          jobs.push({ tx, ty, url: tl._url.replace('{s}', s).replace('{x}', tx).replace('{y}', ty).replace('{z}', z).replace('{r}', '') });
+        }
+        let idx = 0;
+        const worker = async () => {
+          while (idx < jobs.length) {
+            stale(); const j = jobs[idx++], im = await pdfTile(j.url); res.tiles++;
+            if (!im) { res.failed++; continue; }
+            const dx = (-WORLD / 2 + j.tx * rng.S - left) / mpp, dy = (top - (WORLD / 2 - j.ty * rng.S)) / mpp, dw = rng.S / mpp;
+            ctx.globalAlpha = 1; ctx.drawImage(im, dx, dy, dw + 0.7, dw + 0.7);
+          }
+        };
+        await Promise.all(Array.from({ length: 8 }, worker));
+      }
+    }
+    for (let li = o.ids.length - 1; li >= 0; li--) {   // bottom layer first
+      const lyr = byId(o.ids[li]); if (!lyr) continue;
+      const d = lyr.manual ? { features: Array.from(lyr.sel.values()) } : pdfData[lyr.id];
+      if (!d) continue;
+      ctx.save();
+      let c = 0;
+      for (const f of d.features) { pdfGeom(ctx, lyr, f.geometry, P, k); if (++c % 3000 === 0) { stale(); await pdfYield(); } }
+      if (o.labels) pdfLabels(ctx, lyr, d.features, P, k, wpx, hpx);
+      ctx.restore(); ctx.globalAlpha = 1; ctx.setLineDash([]);
+      stale();
+    }
+    return res;
+  }
+  function pdfLegendIcon(lyr) {
+    const c = document.createElement('canvas'); c.width = 96; c.height = 60; const x = c.getContext('2d'), k = 2.2, st = lyr.style, kind = gkind(lyr);
+    x.lineJoin = 'round';
+    if (kind === 'polygon') {
+      x.beginPath(); x.rect(10, 10, 76, 40);
+      if (st.fillOp > 0) { x.globalAlpha = st.fillOp; x.fillStyle = st.fill; x.fill(); }
+      pdfSetStroke(x, Object.assign({}, st, { weight: Math.min(st.weight, 3) }), k); x.stroke();
+    } else if (kind === 'line') {
+      x.beginPath(); x.moveTo(8, 46); x.bezierCurveTo(34, 46, 40, 14, 88, 14); pdfSetStroke(x, Object.assign({}, st, { weight: Math.min(st.weight, 3.5) }), k); x.stroke();
+    } else {
+      const l2 = Object.assign({}, lyr, { style: Object.assign({}, st, { size: Math.min(ptSize(lyr), 14) }) }); pdfDrawPoint(x, l2, 48, 30, k);
+    }
+    return c.toDataURL('image/png');
+  }
+
+  /* 5. build the PDF */
+  async function pdfExport() {
+    if (!window.jspdf || !window.jspdf.jsPDF) { setPdfStatus('The PDF library did not load (it needs an internet connection). Reload the page and try again.', 'err'); return; }
+    clearTimeout(pdfTimer);
+    const tok = ++pdfToken; if (pdfAbort) pdfAbort.abort();
+    const ac = pdfAbort = new AbortController(); pdfRunning = true; setPdfBusy(true); setPdfProgress(0.05); busy(1);
+    const stale = () => tok !== pdfToken || ac.signal.aborted;
+    try {
+      const o = pdfOpts(), lay = pdfLayout(o);
+      for (const id of o.ids) { await pdfLoad(byId(id), ac.signal); if (stale()) throw pdfAbortErr(); }
+      setPdfStatus('Drawing the map…'); setPdfProgress(0.35);
+      let wpx = Math.round(lay.frameW / 25.4 * o.dpi), hpx = Math.round(lay.frameH / 25.4 * o.dpi);
+      const f = Math.min(1, 7000 / Math.max(wpx, hpx), Math.sqrt(36e6 / (wpx * hpx)));
+      wpx = Math.round(wpx * f); hpx = Math.round(hpx * f);
+      const r = await pdfRender({ o, lay, wpx, hpx, dpi: wpx / (lay.frameW / 25.4), stale });
+      setPdfStatus('Writing the PDF…'); setPdfProgress(0.8); await pdfYield();
+      const { jsPDF } = window.jspdf, m = lay.m, doc = new jsPDF({ orientation: lay.land ? 'landscape' : 'portrait', unit: 'mm', format: PDF_PAGES[o.page] });
+      doc.setProperties({ title: pdfTxt(o.title || 'Map'), creator: 'Layer Grabber By Dwiti' });
+      const date = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      let y = m;
+      if (o.title) { doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(20, 34, 45); doc.text(doc.splitTextToSize(pdfTxt(o.title), lay.pw - 2 * m)[0], m, y + 6); }
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 110, 118);
+      if (o.title) doc.text('Approx. scale 1:' + nf(Math.round(r.scale)) + '  |  ' + date, m, y + 10.5);
+      y += lay.titleH;
+      const fy = y;
+      doc.addImage(r.canvas.toDataURL(o.basemap ? 'image/jpeg' : 'image/png', 0.92), o.basemap ? 'JPEG' : 'PNG', m, fy, lay.frameW, lay.frameH);
+      doc.setDrawColor(40, 50, 58); doc.setLineWidth(0.3); doc.rect(m, fy, lay.frameW, lay.frameH);
+      const soft = v => { try { doc.setGState(new doc.GState({ opacity: v })); } catch (e) { /* older build: skip transparency */ } };
+      if (o.scalebar) {
+        const target = 40 * r.realPerMm, pw10 = Math.pow(10, Math.floor(Math.log10(target)));
+        let nice = pw10; [2, 5, 10].forEach(q => { if (pw10 * q <= target) nice = pw10 * q; });
+        const barMm = nice / r.realPerMm, bx = m + 3, by = fy + lay.frameH - 3 - 11, bw = barMm + 14;
+        soft(0.85); doc.setFillColor(255, 255, 255); doc.rect(bx, by, bw, 11, 'F'); soft(1);
+        for (let i = 0; i < 4; i++) { doc.setFillColor(i % 2 ? 255 : 20, i % 2 ? 255 : 20, i % 2 ? 255 : 20); doc.setDrawColor(20, 20, 20); doc.setLineWidth(0.2); doc.rect(bx + 7 + i * barMm / 4, by + 5.2, barMm / 4, 2.2, 'FD'); }
+        doc.setFontSize(7); doc.setTextColor(20, 20, 20);
+        doc.text('0', bx + 7, by + 4, { align: 'center' }); doc.text(nice >= 1000 ? (nice / 1000) + ' km' : nice + ' m', bx + 7 + barMm, by + 4, { align: 'center' });
+        const nx = m + lay.frameW - 3 - 11, ny = fy + 3;
+        soft(0.85); doc.setFillColor(255, 255, 255); doc.rect(nx, ny, 11, 15, 'F'); soft(1);
+        doc.setFillColor(20, 20, 20); doc.triangle(nx + 5.5, ny + 2.5, nx + 2.5, ny + 10.5, nx + 8.5, ny + 10.5, 'F');
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('N', nx + 5.5, ny + 14, { align: 'center' }); doc.setFont('helvetica', 'normal');
+      }
+      y = fy + lay.frameH + 2;
+      if (lay.legendH) {
+        doc.setDrawColor(200, 205, 202); doc.setLineWidth(0.2); doc.line(m, y, m + lay.frameW, y);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(20, 34, 45); doc.text('Legend', m, y + 5);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+        const colW = lay.frameW / lay.cols;
+        o.ids.forEach((id, i) => {
+          const l = byId(id), cx = m + (i % lay.cols) * colW, cy = y + 8 + Math.floor(i / lay.cols) * 6.5;
+          doc.addImage(pdfLegendIcon(l), 'PNG', cx, cy, 9, 5.6);
+          doc.text(doc.splitTextToSize(pdfTxt(l.name), colW - 13)[0], cx + 11, cy + 3.9);
+        });
+      }
+      doc.setFontSize(6.5); doc.setTextColor(120, 128, 134);
+      const foot = (r.attrib.length ? 'Basemap: ' + r.attrib.join(' | ') : 'No basemap') + (r.tiles && r.failed ? ' (some tiles missing)' : '');
+      doc.text(doc.splitTextToSize(pdfTxt(foot), lay.frameW * 0.72)[0], m, lay.ph - m + 1);
+      doc.text(date + '  |  Layer Grabber By Dwiti', lay.pw - m, lay.ph - m + 1, { align: 'right' });
+      setPdfProgress(0.95);
+      const name = GGCore.sanitizeName(o.title || 'map') + '.pdf', blob = doc.output('blob');
+      download(blob, name); setPdfProgress(1);
+      const msg = 'Saved ' + name + ' (' + (blob.size / 1048576).toFixed(1) + ' MB)' + (r.tiles && r.failed ? '. ' + r.failed + ' basemap tiles could not be loaded.' : '.');
+      setPdfStatus(msg, r.tiles && r.failed ? 'warn' : 'ok'); toast(msg);
+    } catch (e) {
+      if (e && e.name === 'AbortError') { setPdfStatus('Stopped.', 'warn'); setPdfProgress(null); }
+      else { setPdfStatus(e.message || String(e), 'err'); setPdfProgress(null); toast('PDF export failed: ' + (e.message || e), 'err'); }
+    } finally { busy(-1); pdfRunning = false; setPdfBusy(false); }
+  }
+  $('#pdfGo').addEventListener('click', pdfExport);
+
   /* ---------- misc wiring ---------- */
   (function wireProxy() {
     const sel = $('#proxySel'), tpl = $('#proxyTpl');
@@ -3960,7 +4421,8 @@ const GGCore = (function () {
   window.addEventListener('resize', () => map.invalidateSize());
   if (window.innerWidth <= 860) $('#attrPane').classList.add('collapsed');
 
-  /* ---------- copy a layer (online or drawn) into a new / existing editable layer ---------- */
+  /* ---------- copy a layer / copy & paste features into editable layers ---------- */
+  var cpClip = null, cpMode = 'copy';
   const CP_RES = ['FID', 'AREA_SQFT', 'AREA_ACRES', 'LENGTH_FT', 'LENGTH_MI', 'LON', 'LAT'];
   function cpKind(l) { if (l.manual) return l.gtype; return ({ esriGeometryPolygon: 'polygon', esriGeometryPolyline: 'line', esriGeometryPoint: 'point', esriGeometryMultipoint: 'point' })[l.geom] || null; }
   function cpPartKind(g) { return g.type === 'Polygon' ? 'polygon' : g.type === 'LineString' ? 'line' : 'point'; }
@@ -3982,7 +4444,7 @@ const GGCore = (function () {
   function cpClean(n) { let s = String(n).trim().replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'FIELD'; if (/^\d/.test(s)) s = 'F' + s; return s.slice(0, 60); }
   function cpType(t) { return /Integer/.test(t) ? (t === 'esriFieldTypeBigInteger' ? 'esriFieldTypeDouble' : 'esriFieldTypeInteger') : /Double|Single/.test(t) ? 'esriFieldTypeDouble' : 'esriFieldTypeString'; }
   function cpSrcFields(l) {
-    return (l.fields || []).filter(f => !f.auto && f.type !== 'esriFieldTypeOID' && f.name !== l.oid && !/^shape[._]/i.test(f.name)).slice(0, 100);
+    return (l.fields || []).filter(f => !f.auto && f.type !== 'esriFieldTypeOID' && f.name !== l.oid && !/^shape[._]/i.test(f.name)).slice(0, 100).map(f => ({ name: f.name, type: f.type }));
   }
   function cpVal(v, fd, isDate) {
     if (v === undefined || v === null || v === '') return null;
@@ -3994,33 +4456,126 @@ const GGCore = (function () {
   function cpUniq(name, used) { let u = name, c = 1; while (used.has(u.toUpperCase())) u = name.slice(0, 55) + '_' + (c++); used.add(u.toUpperCase()); return u; }
   function cpSource() { return byId($('#cpSrc').value); }
 
+  /* a "pack" = geometry parts + attributes + source field list, detached from the source layer */
+  function cpPack(layer, feats) {
+    const kind = cpKind(layer); if (!kind) return null;
+    const items = []; let skipped = 0;
+    feats.forEach(f => {
+      if (!f || !f.geometry) return;
+      const parts = cpParts(f.geometry, []).filter(g => cpPartKind(g) === kind);
+      if (parts.length) items.push({ props: JSON.parse(JSON.stringify(f.properties || {})), parts }); else skipped++;
+    });
+    return { srcName: layer.name, kind, fields: cpSrcFields(layer), items, skipped };
+  }
+  function cpPickedFeats(layer) { return Array.from(layer.picked || []).map(k => featByKey(layer, k)).filter(f => f && f.geometry); }
+
+  /* put a pack into a new layer (target = null) or an existing editable layer */
+  function cpTransfer(pack, target, name, addF) {
+    const n0 = pack.items.reduce((a, it) => a + it.parts.length, 0);
+    if (!n0) { toast('Nothing to paste.', 'warn'); return null; }
+    let fmap = [], droppedF = 0, addedF = 0, createdNew = false;
+    if (target) {
+      pushUndo(target);
+      const used = new Set(CP_RES.concat(target.userFields.map(u => u.name.toUpperCase())));
+      pack.fields.forEach(sf => {
+        const want = cpClean(sf.name).toUpperCase();
+        let to = target.userFields.find(u => u.name.toUpperCase() === want);
+        if (!to && addF) {
+          to = { name: cpUniq(cpClean(sf.name), used), alias: '', type: cpType(sf.type) }; to.alias = to.name;
+          target.userFields.push(to); target.sel.forEach(ex => { ex.properties[to.name] = null; }); addedF++;
+        }
+        if (to) fmap.push({ sf, to }); else droppedF++;
+      });
+      target.fields = composeFields(target);
+    } else {
+      const used = new Set(CP_RES), uf = [];
+      pack.fields.forEach(sf => { const to = { name: cpUniq(cpClean(sf.name), used), type: cpType(sf.type) }; uf.push(to); fmap.push({ sf, to }); });
+      target = createEditLayer(name || (pack.srcName + ' (copy)'), pack.kind, uf.length ? uf : null);
+      createdNew = true;
+    }
+    const keys = [];
+    pack.items.forEach(it => it.parts.forEach(g => {
+      const gg = JSON.parse(JSON.stringify(g)), nfe = newFeature(target, gg);
+      fmap.forEach(m => { nfe.properties[m.to.name] = cpVal(it.props[m.sf.name], m.to, m.sf.type === 'esriFieldTypeDate'); });
+      keys.push(String(nfe.id));
+    }));
+    if (!target.visible) { target.visible = true; target.gj.addTo(map); }
+    syncManual(target); setActive(target.id); renderContents();
+    pickFeatures(target, keys, 'replace');
+    let msg = nf(keys.length) + ' feature' + (keys.length === 1 ? '' : 's') + ' from “' + pack.srcName + '” ' + (createdNew ? 'put in the new layer “' + target.name + '”.' : 'pasted into “' + target.name + '”.') + ' They are selected, so you can move or edit them now.';
+    if (addedF) msg += ' ' + addedF + ' field' + (addedF === 1 ? '' : 's') + ' added.';
+    if (droppedF) msg += ' ' + droppedF + ' field' + (droppedF === 1 ? '' : 's') + ' not copied (not in the target layer).';
+    if (pack.skipped) msg += ' ' + pack.skipped + ' skipped (different feature type).';
+    if (!createdNew) msg += ' Undo is available.';
+    toast(msg);
+    return target;
+  }
+
+  /* ----- Copy / Paste (Ctrl+C, Ctrl+V, Ctrl+Shift+V) ----- */
+  function cpCopySelected() {
+    const l = pickedLayer(); if (!l) { toast('Select one or more features first (Select tool, or click rows in the attribute table), then copy.', 'warn'); return; }
+    const pack = cpPack(l, cpPickedFeats(l));
+    if (!pack || !pack.items.length) { toast('The selected features cannot be copied.', 'warn'); return; }
+    cpClip = pack; syncHandUi();
+    const n = pack.items.reduce((a, it) => a + it.parts.length, 0);
+    toast('Copied ' + nf(n) + ' ' + pack.kind + (n === 1 ? '' : 's') + ' from “' + l.name + '”. Press Ctrl+V to paste into the active layer, or Ctrl+Shift+V to choose the layer.');
+  }
+  function cpAutoTarget(kind) {
+    const a = activeLayer(); if (a && a.manual && a.gtype === kind) return a;
+    return layers.slice().reverse().find(l => l.manual && l.gtype === kind) || null;
+  }
+  function cpPaste() {
+    if (!cpClip) { toast('Nothing copied yet. Select features and press Ctrl+C first.', 'warn'); return; }
+    cpTransfer(cpClip, cpAutoTarget(cpClip.kind), null, true);
+  }
+  function cpPasteTo() {
+    if (!cpClip) { toast('Nothing copied yet. Select features and press Ctrl+C first.', 'warn'); return; }
+    cpMode = 'paste'; cpRefresh(true); $('#copyModal').hidden = false;
+  }
+  $('#btnCopy').addEventListener('click', cpCopySelected);
+  $('#btnPaste').addEventListener('click', cpPaste);
+  $('#btnPasteTo').addEventListener('click', cpPasteTo);
+
+  /* ----- "Copy to editable" dialog (also used by Paste to…) ----- */
   function openCopy(src) {
     if (!layers.length) { toast('Add a layer first, then copy it into an editable layer.', 'warn'); return; }
     src = (src && src.id) ? src : (pickedLayer() || activeLayer());
+    cpMode = 'copy';
     $('#cpSrc').innerHTML = layers.map(l => '<option value="' + l.id + '">' + esc(l.name) + (l.manual ? ' (editable)' : ' (online)') + '</option>').join('');
     $('#cpSrc').value = String(src.id);
     $('input[name=cpDest][value=new]').checked = true;
     cpRefresh(true);
     $('#copyModal').hidden = false;
   }
-  function cpRefresh(resetName) {
-    const src = cpSource(); if (!src) return;
-    const kind = cpKind(src), nSel = src.picked ? src.picked.size : 0, nAll = layerPairs(src).length;
-    const sc = $('input[name=cpScope][value=sel]'), al = $('input[name=cpScope][value=all]');
-    $('#cpScopeSel').innerHTML = '<b>Selected features (' + nf(nSel) + ')</b>';
-    $('#cpScopeAll').innerHTML = '<b>All features loaded on the map (' + nf(nAll) + ')</b>';
-    sc.disabled = !nSel; al.disabled = !nAll;
-    if (resetName) (nSel ? sc : al).checked = true;
-    else if (sc.checked && !nSel) al.checked = true;
-    $('#cpScopeHint').textContent = src.manual ? '' : 'Online layers are copied as they are loaded on the map right now. Zoom in to the area you want (or select features) first; zoomed far out, shapes can be simplified.';
-    // targets
-    const targets = layers.filter(l => l.manual && l !== src && l.gtype === kind);
-    $('#cpTarget').innerHTML = targets.map(l => '<option value="' + l.id + '">' + esc(l.name) + ' · ' + nf(l.sel.size) + ' features</option>').join('');
+  function cpRefresh(reset) {
+    const paste = cpMode === 'paste';
+    $('#cpFromFld').hidden = paste; $('#cpScopeFld').hidden = paste;
+    $('#cpTitle').textContent = paste ? 'Paste into which layer?' : 'Copy to an editable layer';
+    $('#cpOk').textContent = paste ? 'Paste' : 'Copy';
+    let kind, srcName;
+    if (paste) { kind = cpClip.kind; srcName = cpClip.srcName; }
+    else {
+      const src = cpSource(); if (!src) return;
+      kind = cpKind(src); srcName = src.name;
+      const nSel = src.picked ? src.picked.size : 0, nAll = layerPairs(src).length;
+      const sc = $('input[name=cpScope][value=sel]'), al = $('input[name=cpScope][value=all]');
+      $('#cpScopeSel').innerHTML = '<b>Selected features (' + nf(nSel) + ')</b>';
+      $('#cpScopeAll').innerHTML = '<b>All features loaded on the map (' + nf(nAll) + ')</b>';
+      sc.disabled = !nSel; al.disabled = !nAll;
+      if (reset) (nSel ? sc : al).checked = true; else if (sc.checked && !nSel) al.checked = true;
+      $('#cpScopeHint').textContent = src.manual ? '' : 'Online layers are copied as they are loaded on the map right now. Zoom in to the area you want (or select features) first; zoomed far out, shapes can be simplified.';
+      $('#cpOk').disabled = !kind || (!nSel && !nAll);
+    }
+    const exclude = paste ? null : cpSource();
+    const targets = layers.filter(l => l.manual && l !== exclude && l.gtype === kind);
+    const act = activeLayer();
+    $('#cpTarget').innerHTML = targets.map(l => '<option value="' + l.id + '"' + (act && act.id === l.id ? ' selected' : '') + '>' + esc(l.name) + ' · ' + nf(l.sel.size) + ' features</option>').join('');
     const ex = $('input[name=cpDest][value=existing]'); ex.disabled = !targets.length; $('#cpTarget').disabled = !targets.length;
     if (!targets.length && ex.checked) $('input[name=cpDest][value=new]').checked = true;
-    if (resetName) $('#cpName').value = src.name + ' (copy)';
-    $('#cpDestHint').textContent = !kind ? 'This layer’s feature type cannot be copied.' : targets.length ? 'Only editable ' + (kind === 'line' ? 'line' : kind) + ' layers are listed, because features can only go into a layer of the same type.' : 'You have no editable ' + (kind === 'line' ? 'line' : kind) + ' layer yet, so a new layer will be created.';
-    $('#cpOk').disabled = !kind || (!nSel && !nAll);
+    if (paste && reset && targets.length) ex.checked = true;
+    if (reset) $('#cpName').value = srcName + ' (copy)';
+    $('#cpDestHint').textContent = !kind ? 'This layer’s feature type cannot be copied.' : targets.length ? 'Only editable ' + kind + ' layers are listed, because features can only go into a layer of the same type.' : 'You have no editable ' + kind + ' layer yet, so a new layer will be created.';
+    if (paste) $('#cpOk').disabled = false;
     cpMark();
   }
   function cpMark() {
@@ -4034,52 +4589,362 @@ const GGCore = (function () {
   $('#tCopy').addEventListener('click', () => openCopy());
 
   $('#cpOk').addEventListener('click', () => {
-    const src = cpSource(); if (!src) return;
-    const kind = cpKind(src); if (!kind) return;
-    const scope = $('input[name=cpScope]:checked').value, dest = $('input[name=cpDest]:checked').value;
-    const feats = (scope === 'sel' ? Array.from(src.picked).map(k => featByKey(src, k)) : layerPairs(src).map(p => p[1])).filter(f => f && f.geometry);
-    const items = []; let skipped = 0;
-    feats.forEach(f => { const parts = cpParts(f.geometry, []).filter(g => cpPartKind(g) === kind); if (parts.length) items.push({ f, parts }); else skipped++; });
-    if (!items.length) { toast('No ' + kind + ' features to copy.', 'warn'); return; }
-    const sf = cpSrcFields(src);
-    let target, createdNew = false, fmap = [], droppedF = 0, addedF = 0;
-    if (dest === 'existing') {
-      target = byId($('#cpTarget').value); if (!target) return;
-      const addF = $('#cpAddF').checked;
-      pushUndo(target);
-      const used = new Set(CP_RES.concat(target.userFields.map(u => u.name.toUpperCase())));
-      sf.forEach(s => {
-        const want = cpClean(s.name).toUpperCase();
-        let to = target.userFields.find(u => u.name.toUpperCase() === want);
-        if (!to && addF) {
-          to = { name: cpUniq(cpClean(s.name), used), alias: '', type: cpType(s.type) }; to.alias = to.name;
-          target.userFields.push(to); target.sel.forEach(ex => { ex.properties[to.name] = null; }); addedF++;
-        }
-        if (to) fmap.push({ s, to }); else droppedF++;
-      });
-      target.fields = composeFields(target);
-    } else {
-      const used = new Set(CP_RES), uf = [];
-      sf.forEach(s => { const to = { name: cpUniq(cpClean(s.name), used), type: cpType(s.type) }; uf.push(to); fmap.push({ s, to }); });
-      target = createEditLayer($('#cpName').value.trim() || (src.name + ' (copy)'), kind, uf.length ? uf : null);
-      createdNew = true;
+    const dest = $('input[name=cpDest]:checked').value, addF = $('#cpAddF').checked;
+    const target = dest === 'existing' ? byId($('#cpTarget').value) : null, name = $('#cpName').value.trim();
+    let pack;
+    if (cpMode === 'paste') pack = cpClip;
+    else {
+      const src = cpSource(); if (!src || !cpKind(src)) return;
+      const scope = $('input[name=cpScope]:checked').value;
+      pack = cpPack(src, scope === 'sel' ? cpPickedFeats(src) : layerPairs(src).map(p => p[1]));
     }
-    let copied = 0;
-    items.forEach(it => it.parts.forEach(g => {
-      const nfe = newFeature(target, g);
-      fmap.forEach(m => { nfe.properties[m.to.name] = cpVal(it.f.properties && it.f.properties[m.s.name], m.to, m.s.type === 'esriFieldTypeDate'); });
-      copied++;
-    }));
-    if (!target.visible) { target.visible = true; target.gj.addTo(map); }
-    syncManual(target); setActive(target.id); renderContents();
+    if (!pack || !pack.items.length) { toast('No features to copy.', 'warn'); return; }
+    if (dest === 'existing' && !target) return;
     $('#copyModal').hidden = true;
-    let msg = 'Copied ' + nf(copied) + ' feature' + (copied === 1 ? '' : 's') + ' from “' + src.name + '” ' + (createdNew ? 'into the new layer “' + target.name + '”.' : 'into “' + target.name + '”.') + ' You can now edit ' + (copied === 1 ? 'it' : 'them') + '.';
-    if (addedF) msg += ' ' + addedF + ' field' + (addedF === 1 ? '' : 's') + ' added.';
-    if (droppedF) msg += ' ' + droppedF + ' field' + (droppedF === 1 ? '' : 's') + ' not copied (not in the target layer).';
-    if (skipped) msg += ' ' + skipped + ' skipped (different feature type).';
-    if (!createdNew) msg += ' Undo is available.';
-    toast(msg);
+    cpTransfer(pack, target, name, addF);
   });
+
+
+  /* ---------- measure tool: distance, area, radius, coordinates, selected features ---------- */
+  const M_LEN = [['m', 'Meters', 1], ['km', 'Kilometers', 1000], ['ft', 'Feet', 0.3048], ['yd', 'Yards', 0.9144], ['mi', 'Miles', 1609.344], ['nmi', 'Nautical miles', 1852], ['ch', 'Chains', 20.1168]];
+  const M_AREA = [['sqm', 'Square meters', 1], ['ha', 'Hectares', 1e4], ['acre', 'Acres', 4046.8564224], ['gunta', 'Guntas', 101.17141056], ['cent', 'Cents', 40.468564224], ['sqft', 'Square feet', 0.09290304], ['sqyd', 'Square yards (gaj)', 0.83612736], ['sqkm', 'Square kilometers', 1e6], ['sqmi', 'Square miles', 2589988.110336]];
+  const mGroup = L.layerGroup().addTo(map);
+  let ms = null, mPref = { len: 'm', area: 'acre', seg: true, snap: true };
+  try { Object.assign(mPref, JSON.parse(localStorage.getItem('lg_measure_units') || '{}')); } catch (e) { /* ignore */ }
+  const RAD = Math.PI / 180;
+
+  function vinc(lat1, lon1, lat2, lon2) {
+    const a = 6378137, f = 1 / 298.257223563, b = a * (1 - f), Ld = (lon2 - lon1) * RAD;
+    const U1 = Math.atan((1 - f) * Math.tan(lat1 * RAD)), U2 = Math.atan((1 - f) * Math.tan(lat2 * RAD));
+    const sU1 = Math.sin(U1), cU1 = Math.cos(U1), sU2 = Math.sin(U2), cU2 = Math.cos(U2);
+    let lam = Ld, lamP, it = 0, sS, cS, sig, sA, c2A, c2SM;
+    do {
+      const sl = Math.sin(lam), cl = Math.cos(lam);
+      sS = Math.sqrt(Math.pow(cU2 * sl, 2) + Math.pow(cU1 * sU2 - sU1 * cU2 * cl, 2)); if (sS === 0) return 0;
+      cS = sU1 * sU2 + cU1 * cU2 * cl; sig = Math.atan2(sS, cS); sA = cU1 * cU2 * sl / sS; c2A = 1 - sA * sA;
+      c2SM = c2A ? cS - 2 * sU1 * sU2 / c2A : 0;
+      const C = f / 16 * c2A * (4 + f * (4 - 3 * c2A)); lamP = lam;
+      lam = Ld + (1 - C) * f * sA * (sig + C * sS * (c2SM + C * cS * (-1 + 2 * c2SM * c2SM)));
+    } while (Math.abs(lam - lamP) > 1e-12 && ++it < 100);
+    if (it >= 100) return L.latLng(lat1, lon1).distanceTo(L.latLng(lat2, lon2));
+    const u2 = c2A * (a * a - b * b) / (b * b), A = 1 + u2 / 16384 * (4096 + u2 * (-768 + u2 * (320 - 175 * u2))), B = u2 / 1024 * (256 + u2 * (-128 + u2 * (74 - 47 * u2)));
+    const dS = B * sS * (c2SM + B / 4 * (cS * (-1 + 2 * c2SM * c2SM) - B / 6 * c2SM * (-3 + 4 * sS * sS) * (-3 + 4 * c2SM * c2SM)));
+    return b * A * (sig - dS);
+  }
+  const mDist = (p, q) => vinc(p.lat, p.lng, q.lat, q.lng);
+  function mBearing(p, q) {
+    const f1 = p.lat * RAD, f2 = q.lat * RAD, dl = (q.lng - p.lng) * RAD;
+    return (Math.atan2(Math.sin(dl) * Math.cos(f2), Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl)) / RAD + 360) % 360;
+  }
+  function mRingArea(ring) {   // ring = [[lng,lat],...] ; spherical excess on the authalic sphere
+    const R = 6371007.2; let t = 0;
+    for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; t += (b[0] - a[0]) * RAD * (2 + Math.sin(a[1] * RAD) + Math.sin(b[1] * RAD)); }
+    return Math.abs(t * R * R / 2);
+  }
+  function mRingLen(ring) { let m = 0; for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; m += vinc(a[1], a[0], b[1], b[0]); } return m; }
+  function mLineLen(cs) { let m = 0; for (let i = 0; i < cs.length - 1; i++) m += vinc(cs[i][1], cs[i][0], cs[i + 1][1], cs[i + 1][0]); return m; }
+  const mOpen = r => { const c = r.slice(); if (c.length > 1 && c[0][0] === c[c.length - 1][0] && c[0][1] === c[c.length - 1][1]) c.pop(); return c; };
+  function mDMS(v, pos, neg) {
+    const tot = Math.round(Math.abs(v) * 360000) / 100, d = Math.floor(tot / 3600), m = Math.floor((tot % 3600) / 60), sec = tot - d * 3600 - m * 60;
+    return d + '° ' + m + '′ ' + sec.toFixed(2) + '″ ' + (v < 0 ? neg : pos);
+  }
+  function mQuad(az) {
+    let a, pre, suf;
+    if (az <= 90) { pre = 'N'; a = az; suf = 'E'; } else if (az <= 180) { pre = 'S'; a = 180 - az; suf = 'E'; } else if (az <= 270) { pre = 'S'; a = az - 180; suf = 'W'; } else { pre = 'N'; a = 360 - az; suf = 'W'; }
+    const tot = Math.round(a * 3600), d = Math.floor(tot / 3600), m = Math.floor((tot % 3600) / 60), sec = tot % 60;
+    return pre + ' ' + d + '° ' + m + '′ ' + sec + '″ ' + suf;
+  }
+  function mUTM(lat, lon) {
+    const a = 6378137, f = 1 / 298.257223563, k0 = 0.9996, e2 = f * (2 - f), ep2 = e2 / (1 - e2);
+    if (lat < -80 || lat > 84) return 'Outside UTM range';
+    const zone = Math.floor((lon + 180) / 6) % 60 + 1, lon0 = ((zone - 1) * 6 - 180 + 3) * RAD, phi = lat * RAD, lam = lon * RAD - lon0;
+    const sp = Math.sin(phi), cp = Math.cos(phi), N = a / Math.sqrt(1 - e2 * sp * sp), T = Math.tan(phi) * Math.tan(phi), C = ep2 * cp * cp, A = cp * lam;
+    const M = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * Math.pow(e2, 3) / 256) * phi - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * Math.pow(e2, 3) / 1024) * Math.sin(2 * phi) + (15 * e2 * e2 / 256 + 45 * Math.pow(e2, 3) / 1024) * Math.sin(4 * phi) - (35 * Math.pow(e2, 3) / 3072) * Math.sin(6 * phi));
+    const x = k0 * N * (A + (1 - T + C) * Math.pow(A, 3) / 6 + (5 - 18 * T + T * T + 72 * C - 58 * ep2) * Math.pow(A, 5) / 120) + 500000;
+    let y = k0 * (M + N * Math.tan(phi) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * Math.pow(A, 4) / 24 + (61 - 58 * T + T * T + 600 * C - 330 * ep2) * Math.pow(A, 6) / 720));
+    if (lat < 0) y += 1e7;
+    const band = 'CDEFGHJKLMNPQRSTUVWX'.charAt(Math.max(0, Math.min(19, Math.floor((lat + 80) / 8))));
+    return 'Zone ' + zone + band + ' (' + (lat >= 0 ? 'N' : 'S') + ')   E ' + x.toFixed(2) + ' m   N ' + y.toFixed(2) + ' m';
+  }
+  function mMerc(lat, lon) { const R = 6378137; return 'X ' + (R * lon * RAD).toFixed(2) + '   Y ' + (R * Math.log(Math.tan(Math.PI / 4 + lat * RAD / 2))).toFixed(2); }
+  function mFmt(v) { const a = Math.abs(v); const d = a === 0 ? 0 : a < 1 ? 4 : a < 100 ? 3 : 2; return Number(v).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: d }); }
+  const mLenU = () => M_LEN.find(u => u[0] === mPref.len) || M_LEN[0];
+  const mAreaU = () => M_AREA.find(u => u[0] === mPref.area) || M_AREA[2];
+  const mL = m => mFmt(m / mLenU()[2]) + ' ' + mLenU()[0];
+  const mA = m2 => mFmt(m2 / mAreaU()[2]) + ' ' + ({ sqm: 'm²', ha: 'ha', acre: 'ac', gunta: 'guntas', cent: 'cents', sqft: 'ft²', sqyd: 'yd²', sqkm: 'km²', sqmi: 'mi²' })[mAreaU()[0]];
+  const mLblIcon = (txt, big, extra) => L.divIcon({ className: 'mlbl-wrap', html: '<span class="mlbl' + (big ? ' big' : '') + (extra ? ' ' + extra : '') + '">' + esc(txt) + '</span>', iconSize: [0, 0] });
+  const mMid = (a, b) => L.latLng((a.lat + b.lat) / 2, (a.lng + b.lng) / 2);
+
+  /* ----- panel ----- */
+  const mPanel = document.createElement('div');
+  mPanel.id = 'measPanel'; mPanel.hidden = true;
+  mPanel.innerHTML = '<h3><span id="mpTitle">Measure</span><button class="mp-x" id="mpX" title="Close and clear">×</button></h3><div class="mp-b">' +
+    '<div class="mp-row"><label>Length <select id="mpLen"></select></label><label>Area <select id="mpArea"></select></label></div>' +
+    '<div class="mp-row"><label><input type="checkbox" id="mpSeg"> Segment labels</label><label><input type="checkbox" id="mpSnap"> Snap to vertices</label></div>' +
+    '<div id="mpOut"></div><div class="mp-row" id="mpBtns"></div><div class="mp-sub" id="mpHint"></div></div>';
+  map.getContainer().appendChild(mPanel);
+  L.DomEvent.disableClickPropagation(mPanel); L.DomEvent.disableScrollPropagation(mPanel);
+  $('#mpLen', mPanel).innerHTML = M_LEN.map(u => '<option value="' + u[0] + '">' + u[1] + '</option>').join('');
+  $('#mpArea', mPanel).innerHTML = M_AREA.map(u => '<option value="' + u[0] + '">' + u[1] + '</option>').join('');
+  /* drag the panel by its title bar */
+  (function () {
+    const head = $('h3', mPanel); let st = null;
+    const clamp = () => {
+      const c = map.getContainer(), w = mPanel.offsetWidth, h = Math.min(mPanel.offsetHeight, c.clientHeight);
+      let x = parseFloat(mPanel.style.left) || 0, y = parseFloat(mPanel.style.top) || 0;
+      x = Math.max(0, Math.min(x, c.clientWidth - Math.min(w, c.clientWidth))); y = Math.max(0, Math.min(y, c.clientHeight - 40));
+      mPanel.style.left = x + 'px'; mPanel.style.top = y + 'px';
+    };
+    head.addEventListener('pointerdown', e => {
+      if (e.target.closest('button') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      e.preventDefault();
+      st = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: mPanel.offsetLeft, oy: mPanel.offsetTop };
+      try { head.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      mPanel.classList.add('dragging');
+    });
+    head.addEventListener('pointermove', e => {
+      if (!st || e.pointerId !== st.id) return;
+      mPanel.style.left = (st.ox + e.clientX - st.sx) + 'px'; mPanel.style.top = (st.oy + e.clientY - st.sy) + 'px'; clamp();
+    });
+    const end = e => { if (!st || e.pointerId !== st.id) return; st = null; mPanel.classList.remove('dragging'); try { head.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ } };
+    head.addEventListener('pointerup', end); head.addEventListener('pointercancel', end);
+    map.on('resize', () => { if (!mPanel.hidden) clamp(); });
+    head.title = 'Drag to move this box';
+  })();
+  function mSyncPrefUi() { $('#mpLen', mPanel).value = mPref.len; $('#mpArea', mPanel).value = mPref.area; $('#mpSeg', mPanel).checked = !!mPref.seg; $('#mpSnap', mPanel).checked = !!mPref.snap; }
+  function mSavePref() { try { localStorage.setItem('lg_measure_units', JSON.stringify(mPref)); } catch (e) { /* ignore */ } }
+  mPanel.addEventListener('change', e => {
+    if (e.target.id === 'mpLen') mPref.len = e.target.value; else if (e.target.id === 'mpArea') mPref.area = e.target.value;
+    else if (e.target.id === 'mpSeg') mPref.seg = e.target.checked; else if (e.target.id === 'mpSnap') mPref.snap = e.target.checked; else return;
+    mSavePref(); mRender();
+  });
+  mPanel.addEventListener('click', e => {
+    if (e.target.closest('#mpX')) { mClear(true); return; }
+    const b = e.target.closest('[data-mp]'); if (!b) return;
+    const a = b.dataset.mp;
+    if (a === 'finish') mFinish(); else if (a === 'undo') mUndo(); else if (a === 'clear') mClear(false);
+    else if (a === 'copy') mCopyText(); else if (a === 'save') mSave();
+  });
+
+  /* ----- state / modes ----- */
+  const M_NAMES = { distance: 'Distance', area: 'Area & perimeter', circle: 'Radius / circle', location: 'Coordinates', selected: 'Selected features' };
+  const M_HINTS = {
+    distance: 'Click each point. Double-click or press Enter to finish, Backspace removes the last point, Esc clears.',
+    area: 'Click each corner. Double-click or press Enter to close the shape, Backspace removes the last point, Esc clears.',
+    circle: 'Click the centre, then click a point on the edge.',
+    location: 'Click anywhere on the map to read its coordinates. Click again to add more points.',
+    selected: ''
+  };
+  function setMeasure(type) {
+    if (type) { if (traceMode) setTraceMode(false); if (drawMode) setDrawMode(false); if (svMode) setSvMode(false); if (eTool) setEditTool(null); }
+    measureMode = type || null;
+    $$('[data-mt]').forEach(b => b.classList.toggle('on', b.dataset.mt === measureMode));
+    map.getContainer().style.cursor = measureMode ? 'crosshair' : '';
+    if (measureMode) { map.doubleClickZoom.disable(); } else { map.doubleClickZoom.enable(); if (ms && !ms.done && ms.type !== 'location') { /* leave unfinished drawing as is */ } }
+    if (measureMode) {
+      mGroup.clearLayers(); ms = { type: measureMode, pts: [], done: false, cur: null };
+      mPanel.hidden = false; mSyncPrefUi(); mRender();
+    }
+    $('#btnPan').classList.toggle('on', !measureMode && !eTool);
+  }
+  function mClear(close) {
+    mGroup.clearLayers();
+    if (close) { ms = null; mPanel.hidden = true; setMeasure(null); return; }
+    if (ms) { ms = { type: ms.type === 'selected' ? (measureMode || 'distance') : ms.type, pts: [], done: false, cur: null }; if (!measureMode && ms.type !== 'selected') setMeasure(ms.type); else mRender(); }
+  }
+  function mUndo() { if (!ms || !ms.pts.length) return; if (ms.done) ms.done = false; ms.pts.pop(); mRender(); }
+  function mFinish() {
+    if (!ms || ms.done) return;
+    const need = ms.type === 'area' ? 3 : 2;
+    if ((ms.type === 'distance' || ms.type === 'area') && ms.pts.length >= need) { ms.done = true; ms.cur = null; mRender(); toast(M_NAMES[ms.type] + ' measured. Copy the results or press Save as feature… to keep the shape.'); }
+  }
+  $$('[data-mt]').forEach(b => b.addEventListener('click', () => setMeasure(measureMode === b.dataset.mt ? null : b.dataset.mt)));
+  $('#btnMClear').addEventListener('click', () => mClear(true));
+  $('#btnMSel').addEventListener('click', mSelected);
+
+  function mSnap(ll) {
+    if (!mPref.snap) return ll;
+    const pt = map.latLngToContainerPoint(ll); let best = null, bd = 10;
+    const test = c => { if (!c) return; const d = map.latLngToContainerPoint([c[1], c[0]]).distanceTo(pt); if (d < bd) { bd = d; best = L.latLng(c[1], c[0]); } };
+    const b = map.getBounds().pad(0.05);
+    layers.forEach(l => { if (!l.visible) return; layerPairs(l).forEach(pr => { const g = pr[1].geometry; if (!g) return; const bb = g.type === 'Point' ? null : null; eachCoord(g, c => { if (c[0] >= b.getWest() && c[0] <= b.getEast() && c[1] >= b.getSouth() && c[1] <= b.getNorth()) test(c); }); }); });
+    ms.pts.forEach(p => test([p.lng, p.lat]));
+    return best || ll;
+  }
+  map.on('click', e => {
+    if (!measureMode || !ms || ms.done) return;
+    const ll = mSnap(e.latlng), t = ms.type;
+    if (t === 'location') { ms.pts.push(ll); mRender(); return; }
+    const last = ms.pts[ms.pts.length - 1];
+    if (last && map.latLngToContainerPoint(ll).distanceTo(map.latLngToContainerPoint(last)) < 4) return;
+    ms.pts.push(ll);
+    if (t === 'circle' && ms.pts.length === 2) { ms.done = true; ms.cur = null; }
+    mRender();
+  });
+  map.on('dblclick', () => { if (measureMode && ms && !ms.done && (ms.type === 'distance' || ms.type === 'area')) mFinish(); });
+  map.on('mousemove', e => {
+    if (!measureMode || !ms || ms.done || !ms.pts.length || ms.type === 'location') return;
+    ms.cur = e.latlng; mRender(true);
+  });
+  document.addEventListener('keydown', e => {
+    if (!measureMode || !ms) return;
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test((e.target && e.target.tagName) || '') || $$('.overlay').some(o => !o.hidden)) return;
+    if (e.key === 'Enter') { e.preventDefault(); mFinish(); }
+    else if (e.key === 'Backspace') { e.preventDefault(); mUndo(); }
+    else if (e.key === 'Escape') { if (ms.pts.length) mClear(false); else setMeasure(null); }
+  });
+
+  /* ----- results ----- */
+  function mTable(rows, hlKey) { return '<table>' + rows.map(r => '<tr' + (r[0] === hlKey ? ' class="hl"' : '') + '><td>' + esc(r[1]) + '</td><td class="n">' + esc(r[2]) + '</td></tr>').join('') + '</table>'; }
+  const mAllLen = m => M_LEN.map(u => [u[0], u[1], mFmt(m / u[2])]);
+  const mAllArea = m2 => M_AREA.map(u => [u[0], u[1], mFmt(m2 / u[2])]);
+  function mCalc() {
+    const t = ms.type, o = { lines: [] }; let pts = ms.pts;
+    if (t === 'distance') {
+      let tot = 0; const segs = [];
+      for (let i = 1; i < pts.length; i++) { const d = mDist(pts[i - 1], pts[i]); tot += d; segs.push({ d, az: mBearing(pts[i - 1], pts[i]), cum: tot }); }
+      o.total = tot; o.segs = segs; o.text = ['Distance measurement', 'Total length: ' + mL(tot)].concat(M_LEN.map(u => '  ' + u[1] + ': ' + mFmt(tot / u[2]))).concat(segs.map((s, i) => 'Segment ' + (i + 1) + ': ' + mL(s.d) + ', azimuth ' + s.az.toFixed(2) + '°, ' + mQuad(s.az)));
+    } else if (t === 'area') {
+      const ring = pts.map(p => [p.lng, p.lat]); const a = pts.length >= 3 ? mRingArea(ring) : 0, per = pts.length >= 2 ? mRingLen(ring) : 0;
+      o.area = a; o.per = per; o.text = ['Area measurement', 'Area: ' + mA(a), 'Perimeter: ' + mL(per), 'Vertices: ' + pts.length].concat(M_AREA.map(u => '  ' + u[1] + ': ' + mFmt(a / u[2]))).concat(M_LEN.map(u => '  Perimeter ' + u[1] + ': ' + mFmt(per / u[2])));
+    } else if (t === 'circle') {
+      const r = pts.length > 1 ? mDist(pts[0], pts[1]) : 0; o.r = r; o.area = Math.PI * r * r; o.circ = 2 * Math.PI * r;
+      o.text = ['Circle measurement', 'Radius: ' + mL(r), 'Diameter: ' + mL(2 * r), 'Circumference: ' + mL(o.circ), 'Area: ' + mA(o.area)];
+    } else if (t === 'location') {
+      o.text = ['Coordinates'].concat(pts.map((p, i) => '#' + (i + 1) + ' ' + p.lat.toFixed(7) + ', ' + p.lng.toFixed(7) + ' | ' + mDMS(p.lat, 'N', 'S') + ' ' + mDMS(p.lng, 'E', 'W') + ' | UTM ' + mUTM(p.lat, p.lng) + ' | WebMercator ' + mMerc(p.lat, p.lng)));
+    }
+    return o;
+  }
+  function mRender(light) {
+    if (!ms) return;
+    const t = ms.type, col = '#0f766e', pts = ms.pts;
+    if (t !== 'selected') {
+      mGroup.clearLayers();
+      const path = pts.slice(); if (!ms.done && ms.cur && pts.length) path.push(ms.cur);
+      const sty = { color: col, weight: 3, dashArray: ms.done ? null : '7 5', interactive: false };
+      if (t === 'area' && path.length >= 3) L.polygon(path, Object.assign({ fillColor: col, fillOpacity: 0.18 }, sty)).addTo(mGroup);
+      else if ((t === 'distance' || t === 'area') && path.length >= 2) L.polyline(path, sty).addTo(mGroup);
+      if (t === 'circle' && pts.length) {
+        const edge = pts[1] || ms.cur;
+        if (edge) { const r = mDist(pts[0], edge); L.circle(pts[0], Object.assign({ radius: r, fillColor: col, fillOpacity: 0.15 }, sty)).addTo(mGroup); L.polyline([pts[0], edge], sty).addTo(mGroup); L.marker(mMid(pts[0], edge), { icon: mLblIcon('r = ' + mL(r)), interactive: false }).addTo(mGroup); }
+      }
+      pts.forEach((p, i) => L.circleMarker(p, { radius: t === 'location' ? 6 : 4, color: col, weight: 2, fillColor: t === 'location' ? col : '#fff', fillOpacity: 1, interactive: false }).addTo(mGroup));
+      if (t === 'location') pts.forEach((p, i) => L.marker(p, { icon: mLblIcon('#' + (i + 1) + '  ' + p.lat.toFixed(6) + ', ' + p.lng.toFixed(6)), interactive: false, zIndexOffset: 500 }).addTo(mGroup));
+      if ((t === 'distance' || t === 'area') && mPref.seg) {
+        for (let i = 1; i < pts.length; i++) L.marker(mMid(pts[i - 1], pts[i]), { icon: mLblIcon(mL(mDist(pts[i - 1], pts[i]))), interactive: false }).addTo(mGroup);
+        if (t === 'area' && ms.done && pts.length >= 3) L.marker(mMid(pts[pts.length - 1], pts[0]), { icon: mLblIcon(mL(mDist(pts[pts.length - 1], pts[0]))), interactive: false }).addTo(mGroup);
+      }
+      if (!ms.done && ms.cur && pts.length && (t === 'distance' || t === 'area')) {
+        const last = pts[pts.length - 1]; let txt = mL(mDist(last, ms.cur));
+        if (t === 'distance') { let tot = mDist(last, ms.cur); for (let i = 1; i < pts.length; i++) tot += mDist(pts[i - 1], pts[i]); txt += '  (total ' + mL(tot) + ')'; }
+        else if (pts.length >= 2) txt += '  (area ' + mA(mRingArea(path.map(p => [p.lng, p.lat]))) + ')';
+        const cp_ = map.latLngToContainerPoint(ms.cur), sz_ = map.getSize();
+        L.marker(ms.cur, { icon: mLblIcon(txt, true, 'live' + (cp_.x > sz_.x - 300 ? ' l' : '') + (cp_.y > sz_.y - 60 ? ' u' : '')), interactive: false, zIndexOffset: 800 }).addTo(mGroup);
+      }
+      if (ms.done && t === 'distance' && pts.length >= 2) L.marker(pts[pts.length - 1], { icon: mLblIcon('Total ' + mL(mCalc().total), true), interactive: false, zIndexOffset: 800 }).addTo(mGroup);
+      if (ms.done && t === 'area' && pts.length >= 3) { const c = L.polygon(pts).getBounds().getCenter(); L.marker(c, { icon: mLblIcon(mA(mCalc().area), true), interactive: false, zIndexOffset: 800 }).addTo(mGroup); }
+    }
+    if (light) return;
+    mPanelOut();
+  }
+  function mPanelOut() {
+    const t = ms.type, o = t === 'selected' ? null : mCalc(); let h = '', btns = '';
+    $('#mpTitle', mPanel).textContent = 'Measure – ' + M_NAMES[t];
+    if (t === 'distance') {
+      if (ms.pts.length < 2) h = '<div class="mp-sub">Click at least two points on the map.</div>';
+      else {
+        const lastSeg = o.segs[o.segs.length - 1];
+        h = '<div><div class="mp-sub">' + (ms.done ? 'Total length' : 'Length so far') + '</div><div class="mp-big">' + esc(mL(o.total)) + '</div></div>' +
+          '<div class="mp-sub">Last segment ' + esc(mL(lastSeg.d)) + ' · azimuth ' + lastSeg.az.toFixed(2) + '° · ' + esc(mQuad(lastSeg.az)) + '</div>' +
+          '<details open><summary>All units</summary>' + mTable(mAllLen(o.total), mPref.len) + '</details>' +
+          '<details><summary>Segments (' + o.segs.length + ')</summary><div class="mp-tab"><table><tr><th>#</th><th>Length</th><th>Azimuth</th><th>Total</th></tr>' + o.segs.map((s, i) => '<tr><td>' + (i + 1) + '</td><td class="n">' + esc(mL(s.d)) + '</td><td class="n">' + s.az.toFixed(2) + '°</td><td class="n">' + esc(mL(s.cum)) + '</td></tr>').join('') + '</table></div></details>';
+      }
+    } else if (t === 'area') {
+      if (ms.pts.length < 3) h = '<div class="mp-sub">Click at least three corners.</div>';
+      else h = '<div><div class="mp-sub">Area</div><div class="mp-big">' + esc(mA(o.area)) + '</div></div><div class="mp-sub">Perimeter ' + esc(mL(o.per)) + ' · ' + ms.pts.length + ' vertices</div>' +
+        '<details open><summary>Area in all units</summary>' + mTable(mAllArea(o.area), mPref.area) + '</details><details><summary>Perimeter in all units</summary>' + mTable(mAllLen(o.per), mPref.len) + '</details>';
+    } else if (t === 'circle') {
+      if (ms.pts.length < 2 && !ms.cur) h = '<div class="mp-sub">Click the centre, then the edge.</div>';
+      else h = '<div><div class="mp-sub">Radius</div><div class="mp-big">' + esc(mL(o.r)) + '</div></div>' + mTable([['d', 'Diameter', mL(2 * o.r)], ['c', 'Circumference', mL(o.circ)], ['a', 'Area', mA(o.area)]]) +
+        '<details><summary>Area in all units</summary>' + mTable(mAllArea(o.area), mPref.area) + '</details>';
+    } else if (t === 'location') {
+      if (!ms.pts.length) h = '<div class="mp-sub">Click the map to read coordinates.</div>';
+      else {
+        const p = ms.pts[ms.pts.length - 1];
+        h = '<div><div class="mp-sub">Point #' + ms.pts.length + '</div><div class="mp-big" style="font-size:16px">' + p.lat.toFixed(7) + ', ' + p.lng.toFixed(7) + '</div></div>' +
+          '<table><tr><td>Latitude</td><td class="n">' + esc(mDMS(p.lat, 'N', 'S')) + '</td></tr><tr><td>Longitude</td><td class="n">' + esc(mDMS(p.lng, 'E', 'W')) + '</td></tr></table>' +
+          '<div><b>UTM</b><br><code>' + esc(mUTM(p.lat, p.lng)) + '</code></div><div><b>Web Mercator (EPSG:3857)</b><br><code>' + esc(mMerc(p.lat, p.lng)) + '</code></div>' +
+          '<div><a href="https://www.google.com/maps?q=' + p.lat.toFixed(7) + ',' + p.lng.toFixed(7) + '" target="_blank" rel="noopener">Open in Google Maps</a></div>';
+        if (ms.pts.length > 1 && ms.pts.length <= 30) {
+          let tot = 0; const rows = ms.pts.map((q, i) => { if (i) tot += mDist(ms.pts[i - 1], q); return '<tr><td>' + (i + 1) + '</td><td class="n">' + q.lat.toFixed(6) + ', ' + q.lng.toFixed(6) + '</td></tr>'; }).join('');
+          h += '<details><summary>All points (' + ms.pts.length + ')</summary><div class="mp-tab"><table>' + rows + '</table></div></details><div class="mp-sub">Distance between first and last: ' + esc(mL(mDist(ms.pts[0], ms.pts[ms.pts.length - 1]))) + '</div>';
+        }
+      }
+    } else if (t === 'selected') h = ms.html || '';
+    if (t === 'distance' || t === 'area') btns += '<button class="btn primary" data-mp="finish"' + (ms.done || ms.pts.length < (t === 'area' ? 3 : 2) ? ' disabled' : '') + '>Finish</button><button class="btn" data-mp="undo"' + (ms.pts.length ? '' : ' disabled') + '>Undo point</button>';
+    const canKeep = (t === 'distance' && ms.pts.length >= 2) || (t === 'area' && ms.pts.length >= 3) || (t === 'circle' && ms.pts.length >= 2) || (t === 'location' && ms.pts.length >= 1);
+    if (t !== 'selected') btns += '<button class="btn" data-mp="copy">Copy results</button>' + (canKeep ? '<button class="btn" data-mp="save" title="Add this shape to a new or existing editable layer">Save as feature…</button>' : '') + '<button class="btn" data-mp="clear">Clear</button>';
+    else btns += '<button class="btn" data-mp="copy">Copy results</button>';
+    $('#mpOut', mPanel).innerHTML = h; $('#mpBtns', mPanel).innerHTML = btns;
+    $('#mpHint', mPanel).textContent = measureMode === t ? M_HINTS[t] : '';
+  }
+
+  /* ----- measure selected features ----- */
+  function mSelected() {
+    const lyr = pickedLayer();
+    if (!lyr) { toast('Select one or more features first (Select tool, or click rows in the attribute table), then press Selected.', 'warn'); return; }
+    const feats = cpPickedFeats(lyr); if (!feats.length) return;
+    if (measureMode) setMeasure(null);
+    mGroup.clearLayers();
+    let area = 0, per = 0, len = 0, npt = 0, np = 0, nl = 0; const rows = [];
+    feats.forEach(f => {
+      const nm = (f.properties && (f.properties[lyr.displayField] != null ? f.properties[lyr.displayField] : f.properties[lyr.oid])) || ''; let a = 0, pr = 0, ln = 0, pt = 0;
+      cpParts(f.geometry, []).forEach(g => {
+        if (g.type === 'Polygon') { g.coordinates.forEach((r, i) => { const o = mOpen(r), ar = mRingArea(o); a += i ? -ar : ar; pr += mRingLen(o); }); np++; }
+        else if (g.type === 'LineString') { ln += mLineLen(g.coordinates); nl++; } else pt++;
+      });
+      area += a; per += pr; len += ln; npt += pt; rows.push({ nm: String(nm), a, pr, ln, pt });
+    });
+    let h = '<div class="mp-sub">' + esc(lyr.name) + ' · ' + feats.length + ' feature' + (feats.length === 1 ? '' : 's') + '</div>';
+    const tx = ['Selected features – ' + lyr.name + ' (' + feats.length + ')'];
+    if (np) { h += '<div><div class="mp-sub">Total area</div><div class="mp-big">' + esc(mA(area)) + '</div></div><div class="mp-sub">Total perimeter ' + esc(mL(per)) + '</div>'; tx.push('Total area: ' + mA(area), 'Total perimeter: ' + mL(per)); }
+    if (nl) { h += '<div><div class="mp-sub">Total length</div><div class="mp-big">' + esc(mL(len)) + '</div></div>'; tx.push('Total length: ' + mL(len)); }
+    if (npt) { h += '<div class="mp-sub">' + npt + ' point' + (npt === 1 ? '' : 's') + '</div>'; tx.push('Points: ' + npt); }
+    if (np) h += '<details><summary>Area in all units</summary>' + mTable(mAllArea(area), mPref.area) + '</details>';
+    if (nl) h += '<details><summary>Length in all units</summary>' + mTable(mAllLen(len), mPref.len) + '</details>';
+    h += '<details open><summary>Each feature</summary><div class="mp-tab"><table><tr><th>Feature</th><th>' + (np ? 'Area' : 'Length') + '</th><th>' + (np ? 'Perimeter' : '') + '</th></tr>' +
+      rows.slice(0, 200).map(r => '<tr><td>' + esc(r.nm) + '</td><td class="n">' + esc(np ? mA(r.a) : mL(r.ln)) + '</td><td class="n">' + esc(np ? mL(r.pr) : '') + '</td></tr>').join('') + '</table></div></details>';
+    rows.forEach((r, i) => tx.push((i + 1) + '. ' + r.nm + ': ' + (np ? 'area ' + mA(r.a) + ', perimeter ' + mL(r.pr) : r.ln ? 'length ' + mL(r.ln) : 'point')));
+    ms = { type: 'selected', pts: [], done: true, html: h, text: tx };
+    mPanel.hidden = false; mSyncPrefUi(); mPanelOut();
+  }
+
+  /* ----- copy results / save as feature ----- */
+  function mCopyText() {
+    if (!ms) return;
+    const txt = (ms.type === 'selected' ? ms.text : mCalc().text).join('\n');
+    const done = () => toast('Measurement results copied to the clipboard.');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, () => mCopyFallback(txt, done)); else mCopyFallback(txt, done);
+  }
+  function mCopyFallback(txt, done) {
+    const ta = document.createElement('textarea'); ta.value = txt; ta.style.cssText = 'position:fixed;left:-999px;top:0'; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { toast('Could not copy. Select the numbers and press Ctrl+C.', 'warn'); }
+    ta.remove();
+  }
+  function mSave() {
+    if (!ms) return;
+    const rc = p => [Number(p.lng.toFixed(8)), Number(p.lat.toFixed(8))], t = ms.type, pts = ms.pts; let kind, items;
+    if (t === 'distance') { kind = 'line'; items = [{ props: {}, parts: [{ type: 'LineString', coordinates: pts.map(rc) }] }]; }
+    else if (t === 'area') { kind = 'polygon'; items = [{ props: {}, parts: [{ type: 'Polygon', coordinates: [GGCore.closeRing(pts.map(rc))] }] }]; }
+    else if (t === 'circle') {
+      kind = 'polygon'; const r = mDist(pts[0], pts[1]), ring = [];
+      for (let i = 0; i < 72; i++) { const az = i * 5 * RAD, dLat = r * Math.cos(az) / 6371008.8 / RAD, dLng = r * Math.sin(az) / (6371008.8 * Math.cos(pts[0].lat * RAD)) / RAD; ring.push([Number((pts[0].lng + dLng).toFixed(8)), Number((pts[0].lat + dLat).toFixed(8))]); }
+      items = [{ props: {}, parts: [{ type: 'Polygon', coordinates: [GGCore.closeRing(ring)] }] }];
+    } else if (t === 'location') { kind = 'point'; items = pts.map(p => ({ props: {}, parts: [{ type: 'Point', coordinates: rc(p) }] })); }
+    else return;
+    cpClip = { srcName: 'Measurement', kind, fields: [], items, skipped: 0 }; syncHandUi(); cpPasteTo();
+  }
+  mSyncPrefUi();
 
   loadEdits(); renderContents(); renderTable(); renderSel(); renderPicks(); syncHandUi(); renderAttrPane(); updateTblBar();
 })();
