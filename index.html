@@ -439,6 +439,841 @@ html.unlocked #gate{display:none}
     <div class="err" id="gateErr"></div>
   </div>
 </div>
+<script type="text/lg-builtin-tool" data-name="Edit tools (built-in)">
+/* Edit tools for Layer Grabber – 32 tools in one panel (shapes + 29 editing tools).
+   Load with:  Load tools > Load file… > edit-tools.js   (then press the new “Edit tools” button)
+
+   SHAPES     Circle, Rectangle, Triangle (press and drag on the map)
+   ALIGNMENT  Move, Move To, Rotate, Scale, Transform, Align Features, Align Edge, Rubbersheet
+   RESHAPE    Edit Vertices, Reshape, Replace Geometry, Continue Feature, Extend or Trim, Fillet, Generalize, Smooth
+   DIVIDE     Split, Explode, Clip, Planarize, Construct Polygons
+   CONSTRUCT  Merge, Buffer, Duplicate Vertical, Offset, Mirror, Copy Parallel, Create Radial, Create Regular Polygon
+
+   How it works: select features with the ribbon's Select tool, open a tool in the panel, answer the small dialog
+   (or click on the map when asked). Edits go to the layer you selected from if it is an editable layer (Ctrl+Z undoes).
+   Service layers are read-only, so their results are saved into a new editable layer instead.
+   Split, Clip, Merge, Buffer, Construct Polygons and polygon Offset use the JSTS geometry library, which is loaded
+   from a CDN the first time one of them is used. */
+(function () {
+  'use strict';
+/*==GEO-START==*/
+  /* ===== geometry helpers (work in lon/lat, or in local metres after projecting) ===== */
+  const D2R = Math.PI / 180;
+  const UNIT = { meters: 1, feet: 0.3048, kilometers: 1000, miles: 1609.344 };
+  function mapC(g, fn) {
+    if (!g) return g; const t = g.type, c = g.coordinates;
+    if (t === 'Point') return { type: t, coordinates: fn(c) };
+    if (t === 'MultiPoint' || t === 'LineString') return { type: t, coordinates: c.map(fn) };
+    if (t === 'Polygon' || t === 'MultiLineString') return { type: t, coordinates: c.map(r => r.map(fn)) };
+    if (t === 'MultiPolygon') return { type: t, coordinates: c.map(p => p.map(r => r.map(fn))) };
+    if (t === 'GeometryCollection') return { type: t, geometries: g.geometries.map(x => mapC(x, fn)) };
+    return g;
+  }
+  function eachC(g, cb) { mapC(g, c => { cb(c); return c; }); }
+  function parts(g) {
+    if (!g) return []; const t = g.type;
+    if (t === 'MultiPoint') return g.coordinates.map(c => ({ type: 'Point', coordinates: c }));
+    if (t === 'MultiLineString') return g.coordinates.map(c => ({ type: 'LineString', coordinates: c }));
+    if (t === 'MultiPolygon') return g.coordinates.map(c => ({ type: 'Polygon', coordinates: c }));
+    if (t === 'GeometryCollection') return [].concat.apply([], g.geometries.map(parts));
+    return [g];
+  }
+  function bboxOf(geoms) { let b = [Infinity, Infinity, -Infinity, -Infinity]; geoms.forEach(g => eachC(g, c => { if (c[0] < b[0]) b[0] = c[0]; if (c[1] < b[1]) b[1] = c[1]; if (c[0] > b[2]) b[2] = c[0]; if (c[1] > b[3]) b[3] = c[1]; })); return b; }
+  function centerOfBox(b) { return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]; }
+  function firstVertex(g) { let r = null; eachC(g, c => { if (!r) r = c.slice(0, 2); }); return r; }
+  function mkProj(lng, lat) {
+    const p = proj4('EPSG:4326', '+proj=aeqd +lat_0=' + lat + ' +lon_0=' + lng + ' +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs');
+    return { fwd: c => p.forward([c[0], c[1]]), inv: c => p.inverse([c[0], c[1]]) };
+  }
+  function projFor(geoms, origin) { return mkProj.apply(null, origin || centerOfBox(bboxOf(geoms))); }
+  const xform = (g, pr, fn) => mapC(g, c => pr.inv(fn(pr.fwd(c))));
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+  const len = a => Math.hypot(a[0], a[1]);
+  const norm = a => { const l = len(a) || 1; return [a[0] / l, a[1] / l]; };
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const dedupe = pts => pts.filter((p, i) => i === 0 || dist(p, pts[i - 1]) > 1e-9);
+  const ringArea = r => { let a = 0; for (let i = 0; i < r.length - 1; i++) a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return a / 2; };
+  const closeRing = r => { const o = r.slice(); const f = o[0], l = o[o.length - 1]; if (f[0] !== l[0] || f[1] !== l[1]) o.push(f.slice()); return o; };
+  function segInt(a, b, c, d) {
+    const r = [b[0] - a[0], b[1] - a[1]], s = [d[0] - c[0], d[1] - c[1]], den = r[0] * s[1] - r[1] * s[0];
+    if (Math.abs(den) < 1e-12) return null;
+    let qp = [c[0] - a[0], c[1] - a[1]], t = (qp[0] * s[1] - qp[1] * s[0]) / den, u = (qp[0] * r[1] - qp[1] * r[0]) / den; const e = 1e-9;
+    if (t < -e || t > 1 + e || u < -e || u > 1 + e) return null;
+    t = Math.min(1, Math.max(0, t)); u = Math.min(1, Math.max(0, u));
+    return { t, u, pt: [a[0] + t * r[0], a[1] + t * r[1]] };
+  }
+  function lineInt(a, b, c, d) {
+    const r = [b[0] - a[0], b[1] - a[1]], s = [d[0] - c[0], d[1] - c[1]], den = r[0] * s[1] - r[1] * s[0];
+    if (Math.abs(den) < 1e-12) return null; const t = ((c[0] - a[0]) * s[1] - (c[1] - a[1]) * s[0]) / den;
+    return [a[0] + t * r[0], a[1] + t * r[1]];
+  }
+  function nearestOnLine(co, p) {
+    let best = { d: Infinity, idx: 0, t: 0, pt: co[0], pos: 0 };
+    for (let i = 0; i < co.length - 1; i++) {
+      const a = co[i], b = co[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+      let t = l2 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2 : 0; t = Math.max(0, Math.min(1, t));
+      const q = [a[0] + t * dx, a[1] + t * dy], d = dist(p, q);
+      if (d < best.d) best = { d, idx: i, t, pt: q, pos: i + t };
+    }
+    return best;
+  }
+  function splitAtPoints(co, pts, eps) {
+    const ps = []; pts.forEach(p => { const n = nearestOnLine(co, p); if (n.d <= eps) ps.push(n); });
+    ps.sort((a, b) => a.pos - b.pos); const total = co.length - 1, cuts = [];
+    ps.forEach(c => { if (c.pos > 1e-9 && c.pos < total - 1e-9 && (!cuts.length || c.pos - cuts[cuts.length - 1].pos > 1e-9)) cuts.push(c); });
+    const out = []; let cur = [co[0]], seg = 0;
+    cuts.forEach(c => { for (let i = seg + 1; i <= Math.floor(c.pos); i++) cur.push(co[i]); cur.push(c.pt); out.push(dedupe(cur)); cur = [c.pt]; seg = Math.floor(c.pos); });
+    for (let i = seg + 1; i < co.length; i++) cur.push(co[i]); out.push(dedupe(cur));
+    return out.filter(l => l.length >= 2);
+  }
+  /* --- simple point transforms (projected metres) --- */
+  const rotPt = (p, o, a) => { const dx = p[0] - o[0], dy = p[1] - o[1], c = Math.cos(a), s = Math.sin(a); return [o[0] + dx * c - dy * s, o[1] + dx * s + dy * c]; };
+  const reflectPt = (p, o, th) => { const dx = p[0] - o[0], dy = p[1] - o[1], c = Math.cos(2 * th), s = Math.sin(2 * th); return [o[0] + dx * c + dy * s, o[1] + dx * s - dy * c]; };
+  /* --- Douglas-Peucker --- */
+  function dpOpen(P, tol) {
+    if (P.length < 3) return P.slice(); const keep = new Array(P.length).fill(false); keep[0] = keep[P.length - 1] = true;
+    const st = [[0, P.length - 1]];
+    while (st.length) {
+      const [s, e] = st.pop(); let md = -1, mi = -1;
+      for (let i = s + 1; i < e; i++) { const n = nearestOnLine([P[s], P[e]], P[i]); if (n.d > md) { md = n.d; mi = i; } }
+      if (md > tol) { keep[mi] = true; st.push([s, mi], [mi, e]); }
+    }
+    return P.filter((_, i) => keep[i]);
+  }
+  function dpRing(R, tol) {
+    const o = R.slice(0, -1); if (o.length <= 3) return R;
+    let k = 0, md = -1; o.forEach((p, i) => { const d = dist(p, o[0]); if (d > md) { md = d; k = i; } });
+    const a = dpOpen(o.slice(0, k + 1), tol), b = dpOpen(o.slice(k).concat([o[0]]), tol), r = a.concat(b.slice(1, -1));
+    if (r.length < 3) return R; r.push(r[0].slice()); return r;
+  }
+  /* --- Chaikin smoothing --- */
+  function chaikin(P, closed, it) {
+    let pts = closed ? P.slice(0, -1) : P.slice();
+    for (let n = 0; n < it; n++) {
+      const out = [], m = pts.length;
+      if (!closed) out.push(pts[0]);
+      for (let i = 0; i < (closed ? m : m - 1); i++) { const a = pts[i], b = pts[(i + 1) % m]; out.push([.75 * a[0] + .25 * b[0], .75 * a[1] + .25 * b[1]], [.25 * a[0] + .75 * b[0], .25 * a[1] + .75 * b[1]]); }
+      if (!closed) out.push(pts[m - 1]); pts = out;
+    }
+    return closed ? pts.concat([pts[0].slice()]) : pts;
+  }
+  /* --- fillet --- */
+  function filletPath(P, closed, r, only) {
+    const n = P.length, out = [];
+    for (let i = 0; i < n; i++) {
+      const C = P[i], end = !closed && (i === 0 || i === n - 1);
+      if (end || (only != null && only !== i)) { out.push(C); continue; }
+      const A = P[(i - 1 + n) % n], B = P[(i + 1) % n], la = dist(A, C), lb = dist(B, C);
+      if (!la || !lb) { out.push(C); continue; }
+      const u = norm(sub(A, C)), v = norm(sub(B, C)), th = Math.acos(Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1])));
+      if (th > Math.PI - 1e-3 || th < 1e-3) { out.push(C); continue; }
+      let t = r / Math.tan(th / 2); const tmax = Math.min(la, lb) * (only != null ? 0.98 : 0.5); if (t > tmax) t = tmax;
+      const re = t * Math.tan(th / 2), T1 = [C[0] + u[0] * t, C[1] + u[1] * t], bis = norm([u[0] + v[0], u[1] + v[1]]), dC = re / Math.sin(th / 2), O = [C[0] + bis[0] * dC, C[1] + bis[1] * dC];
+      const a1 = Math.atan2(T1[1] - O[1], T1[0] - O[0]), a2 = Math.atan2(C[1] + v[1] * t - O[1], C[0] + v[0] * t - O[0]); let d = a2 - a1;
+      while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+      const steps = Math.max(2, Math.ceil(Math.abs(d) / (Math.PI / 18)));
+      for (let k = 0; k <= steps; k++) { const a = a1 + d * k / steps; out.push([O[0] + re * Math.cos(a), O[1] + re * Math.sin(a)]); }
+    }
+    return out;
+  }
+  /* --- parallel offset of a polyline (left = +d), mitre joins --- */
+  function offsetLine(P, d) {
+    P = dedupe(P); if (P.length < 2) return P; const segs = [];
+    for (let i = 0; i < P.length - 1; i++) { const dx = P[i + 1][0] - P[i][0], dy = P[i + 1][1] - P[i][1], l = Math.hypot(dx, dy), nx = -dy / l * d, ny = dx / l * d; segs.push([[P[i][0] + nx, P[i][1] + ny], [P[i + 1][0] + nx, P[i + 1][1] + ny]]); }
+    const out = [segs[0][0]];
+    for (let i = 1; i < segs.length; i++) { const s0 = segs[i - 1], s1 = segs[i], h = lineInt(s0[0], s0[1], s1[0], s1[1]); if (h && dist(h, P[i]) <= Math.abs(d) * 4 + 1e-9) out.push(h); else out.push(s0[1], s1[0]); }
+    out.push(segs[segs.length - 1][1]); return out;
+  }
+  function regularPoly(c, n, R, brg) { const pts = []; for (let k = 0; k < n; k++) { const a = (brg + k * 360 / n) * D2R; pts.push([c[0] + R * Math.sin(a), c[1] + R * Math.cos(a)]); } pts.push(pts[0].slice()); return pts; }
+  /* --- reshape --- */
+  function arcFwd(R, r1, r2, p1, p2) {
+    const n = R.length, delta = ((r2 - r1) % n + n) % n, out = [p1]; let f = Math.floor(r1);
+    for (let m = 1; m <= n; m++) { const off = (f + m) - r1; if (off < delta - 1e-12) out.push(R[(f + m) % n]); else break; }
+    out.push(p2); return out;
+  }
+  function reshapePoly(ring, sk) {
+    const R = ring.slice(0, -1), n = R.length, hits = [];
+    for (let i = 0; i < sk.length - 1; i++) for (let j = 0; j < n; j++) { const h = segInt(sk[i], sk[i + 1], R[j], R[(j + 1) % n]); if (h) hits.push({ s: i + h.t, r: j + h.u, pt: h.pt }); }
+    if (hits.length < 2) return null; hits.sort((x, y) => x.s - y.s);
+    const A = hits[0], B = hits[hits.length - 1]; if (B.s - A.s < 1e-9) return null;
+    const mid = sk.filter((_, k) => k > A.s && k < B.s), S = [A.pt].concat(mid, [B.pt]);
+    const ab = arcFwd(R, A.r, B.r, A.pt, B.pt), ba = arcFwd(R, B.r, A.r, B.pt, A.pt);
+    const c1 = dedupe(S.concat(ba.slice(1))), c2 = dedupe(ab.concat(S.slice().reverse().slice(1)));
+    const r1 = closeRing(c1), r2 = closeRing(c2);
+    return Math.abs(ringArea(r1)) >= Math.abs(ringArea(r2)) ? r1 : r2;
+  }
+  function reshapeLine(co, sk) {
+    let a = nearestOnLine(co, sk[0]), b = nearestOnLine(co, sk[sk.length - 1]);
+    if (a.pos > b.pos) { sk = sk.slice().reverse(); const t = a; a = b; b = t; }
+    return dedupe(co.slice(0, Math.floor(a.pos) + 1).concat([a.pt], sk.slice(1, -1), [b.pt], co.slice(Math.floor(b.pos) + 1)));
+  }
+  /* --- trim / extend a line against boundary lines --- */
+  function trimExtend(co, bounds, clickPt) {
+    const hits = [];
+    bounds.forEach(B => { for (let j = 0; j < B.length - 1; j++) for (let i = 0; i < co.length - 1; i++) { const h = segInt(co[i], co[i + 1], B[j], B[j + 1]); if (h) hits.push({ pos: i + h.t, pt: h.pt }); } });
+    const c = nearestOnLine(co, clickPt);
+    if (hits.length) {
+      hits.sort((x, y) => x.pos - y.pos);
+      const lo = hits.filter(h => h.pos < c.pos - 1e-9).pop(), hi = hits.filter(h => h.pos > c.pos + 1e-9)[0], total = co.length - 1, out = [];
+      const head = h => dedupe(co.slice(0, Math.floor(h.pos) + 1).concat([h.pt])), tail = h => dedupe([h.pt].concat(co.slice(Math.floor(h.pos) + 1)));
+      if (lo) out.push(head(lo)); if (hi) out.push(tail(hi));
+      return { mode: 'trim', lines: out.filter(l => l.length >= 2) };
+    }
+    const first = c.pos < (co.length - 1) / 2, e = first ? co[0] : co[co.length - 1], nb = first ? co[1] : co[co.length - 2], dir = norm(sub(e, nb));
+    let best = null; const far = 1e7, tip = [e[0] + dir[0] * far, e[1] + dir[1] * far];
+    bounds.forEach(B => { for (let j = 0; j < B.length - 1; j++) { const h = segInt(e, tip, B[j], B[j + 1]); if (h && h.t * far > 1e-6 && (!best || h.t < best.t)) best = h; } });
+    if (!best) return { mode: 'extend', lines: [] };
+    return { mode: 'extend', lines: [first ? [best.pt].concat(co) : co.concat([best.pt])] };
+  }
+  /* --- planarize: split every line at its intersections with the others --- */
+  function planarize(lines, eps) {
+    return lines.map((co, i) => {
+      const pts = [];
+      lines.forEach((o, j) => {
+        for (let a = 0; a < co.length - 1; a++) for (let b = 0; b < o.length - 1; b++) { if (j === i && b <= a + 1) continue; const h = segInt(co[a], co[a + 1], o[b], o[b + 1]); if (h) pts.push(h.pt); }
+        if (j !== i) { [o[0], o[o.length - 1]].forEach(p => { if (nearestOnLine(co, p).d <= eps) pts.push(p); }); [co[0], co[co.length - 1]].forEach(p => { if (nearestOnLine(o, p).d <= eps) pts.push(p); }); }
+      });
+      return splitAtPoints(co, pts, eps);
+    });
+  }
+  /* --- inverse-distance rubber-sheeting --- */
+  function rubber(p, links) {
+    let sx = 0, sy = 0, sw = 0;
+    for (const l of links) { const d2 = (p[0] - l.a[0]) ** 2 + (p[1] - l.a[1]) ** 2; if (d2 < 1e-6) return [p[0] + l.d[0], p[1] + l.d[1]]; const w = 1 / d2; sx += w * l.d[0]; sy += w * l.d[1]; sw += w; }
+    return [p[0] + sx / sw, p[1] + sy / sw];
+  }
+  /* --- JSTS wrappers --- */
+  const JS = () => window.jsts;
+  const jr = () => new (JS().io.GeoJSONReader)(), jw = () => new (JS().io.GeoJSONWriter)();
+  const toJ = g => jr().read(g), fromJ = j => jw().write(j);
+  const jlist = l => (l && l.toArray ? l.toArray() : Array.from(l || []));
+  function pip(pt, poly) {
+    const inR = r => { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { if (((r[i][1] > pt[1]) !== (r[j][1] > pt[1])) && (pt[0] < (r[j][0] - r[i][0]) * (pt[1] - r[i][1]) / (r[j][1] - r[i][1]) + r[i][0])) c = !c; } return c; };
+    if (!inR(poly.coordinates[0])) return false; for (let h = 1; h < poly.coordinates.length; h++) if (inR(poly.coordinates[h])) return false; return true;
+  }
+  function validGeom(g) {
+    if (!g || !g.coordinates) return false; let ok = true; eachC(g, c => { if (!isFinite(c[0]) || !isFinite(c[1])) ok = false; });
+    if (!ok) return false; if (g.type === 'LineString') return g.coordinates.length >= 2; if (g.type === 'Polygon') return g.coordinates.every(r => r.length >= 4); return true;
+  }
+/*==GEO-END==*/
+  /* ===== small UI toolkit ===== */
+  const map = LG.map, L = LG.L, T = (m, k) => LG.toast(m, k);
+  const el = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const toC = ll => [ll.lng, ll.lat], toLL = c => L.latLng(c[1], c[0]);
+  const css = el('style'); css.textContent = `
+#lgxPanel{position:fixed;top:150px;right:14px;width:322px;max-height:calc(100vh - 170px);overflow:auto;background:var(--panel,#fff);border:1px solid var(--line,#ccc);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.28);z-index:4500;font-size:12.5px;color:var(--ink,#14222d)}
+#lgxPanel .hd{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--ink,#14222d);color:#fff;cursor:move;border-radius:8px 8px 0 0;position:sticky;top:0;z-index:2;user-select:none}
+#lgxPanel .hd b{flex:1}#lgxPanel .hd button{background:none;border:0;color:#fff;font-size:17px;cursor:pointer;line-height:1}
+#lgxSel{padding:6px 10px;border-bottom:1px solid var(--line,#ddd);color:var(--muted,#5b6d79);font-size:12px}
+#lgxPanel details{border-bottom:1px solid var(--line,#ddd)}#lgxPanel summary{padding:6px 10px;font-weight:650;cursor:pointer;background:#eef2ef}
+.lgx-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:6px}
+.lgx-b{border:1px solid var(--line,#ccc);background:#fff;border-radius:5px;padding:5px 6px;text-align:left;font-size:12px;display:flex;gap:6px;align-items:center;cursor:pointer;color:inherit}
+.lgx-b.on{background:#0f766e;color:#fff}.lgx-b.on i{color:#fff}
+.lgx-b:hover{background:var(--accent-l,#e1f0ee)}.lgx-b i{font-style:normal;width:16px;text-align:center;color:var(--accent,#0f766e);font-weight:700}
+#lgxHint{position:fixed;top:112px;left:50%;transform:translateX(-50%);background:#0f766e;color:#fff;padding:7px 12px;border-radius:7px;z-index:4700;box-shadow:0 4px 14px rgba(0,0,0,.3);display:flex;gap:10px;align-items:center;max-width:min(680px,92vw);font-size:13px}
+#lgxHint button{background:#fff;color:#0f766e;border:0;border-radius:4px;padding:3px 9px;cursor:pointer;font-weight:600}
+.lgx-ov{position:absolute;inset:0;z-index:900;cursor:crosshair;touch-action:none;background:rgba(15,118,110,.05)}
+.lgx-dlgov{position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:6000;display:flex;align-items:center;justify-content:center;padding:12px}
+.lgx-dlg{background:#fff;color:#14222d;border-radius:9px;width:min(430px,100%);max-height:92vh;overflow:auto;box-shadow:0 14px 40px rgba(0,0,0,.4)}
+.lgx-dlg h3{margin:0;padding:11px 14px;font-size:15px;border-bottom:1px solid #ddd}.lgx-dlg .bd{padding:10px 14px;display:grid;gap:9px}
+.lgx-dlg label{display:grid;gap:3px;font-size:12.5px}.lgx-dlg label.ck{display:flex;gap:7px;align-items:center}
+.lgx-dlg input[type=text],.lgx-dlg input[type=number],.lgx-dlg select{border:1px solid #ccd3d0;border-radius:5px;padding:6px 8px;font:inherit;width:100%;box-sizing:border-box}
+.lgx-dlg .pt{display:flex;gap:6px}.lgx-dlg .ft{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid #ddd}
+.lgx-dlg .note{color:#5b6d79;font-size:12px}.lgx-dlg .ft button,.lgx-dlg .pt button{border:1px solid #ccd3d0;background:#fff;border-radius:5px;padding:6px 12px;cursor:pointer;font:inherit}
+.lgx-dlg .ft button.p{background:#0f766e;border-color:#0f766e;color:#fff}`;
+  document.head.appendChild(css);
+
+  /* ----- one dialog for every tool ----- */
+  function ask(title, fields, okText) {
+    if (window.__LGX_ASK) return Promise.resolve(window.__LGX_ASK(title, fields));
+    return new Promise(res => {
+      const ov = el('div', 'lgx-dlgov'), box = el('div', 'lgx-dlg'), bd = el('div', 'bd'), inputs = {};
+      box.appendChild(el('h3', null, esc(title))); box.appendChild(bd);
+      fields.forEach(f => {
+        if (f.type === 'note') { bd.appendChild(el('div', 'note', f.label)); return; }
+        const lab = el('label', f.type === 'check' ? 'ck' : ''); let inp;
+        if (f.type === 'select') { inp = el('select'); f.options.forEach(o => { const op = el('option', null, esc(o)); op.value = o; inp.appendChild(op); }); inp.value = f.value != null ? f.value : f.options[0]; }
+        else if (f.type === 'check') { inp = el('input'); inp.type = 'checkbox'; inp.checked = !!f.value; }
+        else { inp = el('input'); inp.type = f.type === 'number' ? 'number' : 'text'; if (f.type === 'number') { inp.step = f.step || 'any'; if (f.min != null) inp.min = f.min; if (f.max != null) inp.max = f.max; } inp.value = f.value == null ? '' : f.value; }
+        if (f.type === 'check') { lab.appendChild(inp); lab.appendChild(el('span', null, esc(f.label))); }
+        else { lab.appendChild(el('span', null, esc(f.label))); if (f.type === 'point') { const w = el('div', 'pt'); w.appendChild(inp); const b = el('button', null, 'Pick on map'); b.type = 'button'; b.onclick = async () => { ov.style.display = 'none'; const ll = await pickPoint('Click the location on the map.'); ov.style.display = 'flex'; if (ll) inp.value = ll.lng.toFixed(7) + ', ' + ll.lat.toFixed(7); }; w.appendChild(b); lab.appendChild(w); } else lab.appendChild(inp); }
+        if (f.hint) lab.appendChild(el('span', 'note', esc(f.hint)));
+        bd.appendChild(lab); inputs[f.k] = { f, inp };
+      });
+      const ft = el('div', 'ft'), cancel = el('button', null, 'Cancel'), ok = el('button', 'p', esc(okText || 'OK')); ft.appendChild(cancel); ft.appendChild(ok); box.appendChild(ft); ov.appendChild(box); document.body.appendChild(ov);
+      const close = v => { ov.remove(); res(v); };
+      cancel.onclick = () => close(null);
+      ok.onclick = () => {
+        const out = {};
+        for (const k in inputs) {
+          const { f, inp } = inputs[k];
+          if (f.type === 'check') out[k] = inp.checked;
+          else if (f.type === 'number') { const raw = String(inp.value).trim(); if (raw === '') { if (f.optional) { out[k] = null; continue; } T('Enter a number for “' + f.label + '”.', 'warn'); inp.focus(); return; } out[k] = Number(raw); if (!isFinite(out[k])) { T('“' + f.label + '” must be a number.', 'warn'); return; } }
+          else if (f.type === 'point') { const m = String(inp.value).match(/(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)/); if (!m) { T('Enter the location as “longitude, latitude”, or press Pick on map.', 'warn'); return; } out[k] = [Number(m[1]), Number(m[2])]; }
+          else out[k] = inp.value;
+        }
+        close(out);
+      };
+      ov.addEventListener('keydown', e => { if (e.key === 'Escape') close(null); else if (e.key === 'Enter' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'SELECT') { e.preventDefault(); ok.click(); } });
+      const first = bd.querySelector('input,select'); if (first) setTimeout(() => first.focus(), 30);
+    });
+  }
+
+  /* ----- map interaction (an overlay: tap = click, drag = pan, wheel = zoom) ----- */
+  let cur = null;
+  function hint(msg) { let h = document.getElementById('lgxHint'); if (!msg) { if (h) h.remove(); return; } if (!h) { h = el('div'); h.id = 'lgxHint'; document.body.appendChild(h); } h.innerHTML = '<span>' + esc(msg) + '</span><button type="button">Cancel (Esc)</button>'; h.querySelector('button').onclick = () => cancelInteract(); }
+  function cancelInteract() { if (cur) cur.fin(null); }
+  function interact(msg, h) {
+    cancelInteract();
+    const pan = document.getElementById('btnPan'); if (pan && !pan.classList.contains('on')) pan.click();
+    return new Promise(resolve => {
+      const cont = map.getContainer(), ov = el('div', 'lgx-ov'), pv = L.layerGroup().addTo(map); cont.appendChild(ov); hint(msg);
+      let down = null, lastTap = 0, lastPt = null;
+      const fin = v => { ov.remove(); pv.remove(); document.removeEventListener('keydown', onKey, true); cur = null; hint(null); resolve(v); };
+      const llOf = e => map.mouseEventToLatLng(e);
+      ov.addEventListener('pointerdown', e => { if (e.button) return; down = { x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, moved: false }; try { ov.setPointerCapture(e.pointerId); } catch (x) { /* ok */ } });
+      ov.addEventListener('pointermove', e => {
+        if (down) { if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) down.moved = true; if (down.moved) { map.panBy([-(e.clientX - down.px), -(e.clientY - down.py)], { animate: false }); } down.px = e.clientX; down.py = e.clientY; }
+        else if (h.move) h.move(llOf(e), pv);
+      });
+      ov.addEventListener('pointerup', e => {
+        if (!down) return; const d = down; down = null; if (d.moved) return;
+        const ll = llOf(e), now = Date.now(), pt = [e.clientX, e.clientY];
+        if (now - lastTap < 350 && lastPt && Math.hypot(pt[0] - lastPt[0], pt[1] - lastPt[1]) < 10) { lastTap = 0; if (h.dbl) h.dbl(ll, fin, pv); else if (h.enter) h.enter(fin, pv); return; }
+        lastTap = now; lastPt = pt; if (h.click) h.click(ll, fin, pv);
+      });
+      ov.addEventListener('wheel', e => { e.preventDefault(); cont.dispatchEvent(new WheelEvent('wheel', e)); }, { passive: false });
+      ov.addEventListener('contextmenu', e => { e.preventDefault(); if (h.back) h.back(pv); });
+      function onKey(e) {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fin(null); }
+        else if (e.key === 'Enter' && h.enter) { e.preventDefault(); e.stopPropagation(); h.enter(fin, pv); }
+        else if (e.key === 'Backspace' && h.back) { e.preventDefault(); e.stopPropagation(); h.back(pv); }
+      }
+      document.addEventListener('keydown', onKey, true); cur = { fin };
+    });
+  }
+  const pStyle = { color: '#0f766e', weight: 2, dashArray: '5 4', interactive: false };
+  function pickPoint(msg, o) {
+    if (window.__LGX_PICK) return Promise.resolve(window.__LGX_PICK('point', msg));
+    return interact(msg, { click: (ll, f) => f(ll), enter: o && o.allowDone ? f => f('done') : null });
+  }
+  function pickPath(msg, o) {
+    o = o || {}; if (window.__LGX_PICK) return Promise.resolve(window.__LGX_PICK(o.kind || 'line', msg));
+    const pts = (o.prefix || []).map(toLL), min = o.min || 2;
+    const draw = (pv, curLL) => {
+      pv.clearLayers(); const all = pts.concat(curLL ? [curLL] : []);
+      if (all.length > 1) (o.kind === 'polygon' && all.length > 2 ? L.polygon(all, pStyle) : L.polyline(all, pStyle)).addTo(pv);
+      pts.forEach(p => L.circleMarker(p, { radius: 4, color: '#0f766e', fillOpacity: 1, interactive: false }).addTo(pv));
+    };
+    const done = f => { if (pts.length < min) { T('Add at least ' + min + ' points first.', 'warn'); return; } f(pts.map(toC)); };
+    return interact(msg, {
+      click: (ll, f, pv) => { pts.push(ll); if (o.max && pts.length >= o.max) f(pts.map(toC)); else draw(pv, null); },
+      move: (ll, pv) => draw(pv, ll), enter: done, dbl: done,
+      back: pv => { if (pts.length > (o.prefix ? o.prefix.length : 0)) { pts.pop(); draw(pv, null); } }
+    });
+  }
+
+  /* ----- selection + saving helpers ----- */
+  const layerIds = {}; const typeFor = k => ({ polygon: 'Polygon', line: 'LineString', point: 'Point' })[k];
+  const geomsOf = c => c.items.map(i => i.feature.geometry);
+  function need(o) {
+    o = o || {}; const c = LG.picked();
+    if (!c || !c.items.length) { T('Select one or more features first: use the Select tool, then click a feature (Shift adds more).', 'warn'); return null; }
+    if (o.kinds && o.kinds.indexOf(c.kind) < 0) { T('This tool works on ' + o.kinds.join(' or ') + ' features, but the selection is ' + c.kind + '.', 'warn'); return null; }
+    if (o.min && c.items.length < o.min) { T('Select at least ' + o.min + ' features for this tool.', 'warn'); return null; }
+    if (o.max && c.items.length > o.max) { T('Select only ' + (o.max === 1 ? 'one feature' : o.max + ' features') + ' for this tool.', 'warn'); return null; }
+    return c;
+  }
+  function emit(kind, name, feats, o) {
+    o = o || {}; feats = feats.filter(f => validGeom(f.geometry)); if (!feats.length) { T('The tool produced no geometry.', 'warn'); return null; }
+    const adds = feats.map(f => ({ op: 'add', geometry: f.geometry, properties: f.properties }));
+    if (o.intoActive) { const a = LG.activeLayer(); if (a && a.editable && a.kind === kind) { const r = LG.edit(a.id, adds); LG.pick(a.id, r.added); return a.id; } }
+    const known = layerIds[name];
+    if (known != null && LG.layers().some(l => l.id === known && l.editable && l.kind === kind)) { const r = LG.edit(known, adds); LG.pick(known, r.added); return known; }
+    const c = map.getCenter(), z = map.getZoom(), before = LG.layers().map(l => l.id);
+    LG.addGeoJSON({ type: 'FeatureCollection', features: feats.map(f => ({ type: 'Feature', geometry: f.geometry, properties: Object.assign({ tool: name }, f.properties || {}) })) }, name);
+    map.setView(c, z, { animate: false });
+    const nl = LG.layers().filter(l => before.indexOf(l.id) < 0)[0];
+    if (nl) { layerIds[name] = nl.id; if (o.style) LG.setStyle(nl.id, o.style); } return nl ? nl.id : null;
+  }
+  /* results[i]: geometry | array of geometries | [] (delete) | null (leave alone) */
+  function commit(ctx, results, label) {
+    const ops = [], news = [], want = typeFor(ctx.kind);
+    ctx.items.forEach((it, i) => {
+      const r = results[i]; if (r === undefined || r === null) return;
+      const gs = [].concat.apply([], (Array.isArray(r) ? r : [r]).map(parts)).filter(g => g && g.type === want && validGeom(g));
+      if (!ctx.editable) { gs.forEach(g => news.push({ geometry: g, properties: Object.assign({}, it.feature.properties) })); return; }
+      if (!gs.length) { ops.push({ op: 'delete', key: it.key }); return; }
+      ops.push({ op: 'replace', key: it.key, geometry: gs[0] }); gs.slice(1).forEach(g => ops.push({ op: 'add', geometry: g, properties: it.feature.properties }));
+    });
+    if (!ctx.editable) { if (!news.length) { T('Nothing to save.', 'warn'); return null; } emit(ctx.kind, ctx.name + ' (' + label + ')', news); T('“' + ctx.name + '” is read-only, so the result went to a new editable layer. Use “Copy to editable” first if you want to change it in place.'); return true; }
+    try { const r = LG.edit(ctx.layerId, ops); return r; } catch (e) { T(e.message || String(e), 'err'); return null; }
+  }
+  function addCopies(ctx, list, label) {                  // list: [{geometry, properties}]
+    list = list.filter(x => validGeom(x.geometry) && x.geometry.type === typeFor(ctx.kind)); if (!list.length) { T('Nothing to add.', 'warn'); return false; }
+    if (ctx.editable) { try { const r = LG.edit(ctx.layerId, list.map(x => ({ op: 'add', geometry: x.geometry, properties: x.properties }))); LG.pick(ctx.layerId, r.added); return true; } catch (e) { T(e.message || String(e), 'err'); return false; } }
+    emit(ctx.kind, ctx.name + ' (' + label + ')', list); return true;
+  }
+  const PIV = ['Center of selection', 'First vertex of the first feature', 'A point I click on the map'];
+  async function pivotFor(geoms, choice) {
+    if (choice === PIV[0]) return centerOfBox(bboxOf(geoms));
+    if (choice === PIV[1]) return firstVertex(geoms[0]);
+    const ll = await pickPoint('Click the pivot point.'); return ll ? toC(ll) : null;
+  }
+  const unitField = { k: 'u', label: 'Unit', type: 'select', options: Object.keys(UNIT), value: 'meters' };
+  const ok = (msg) => T(msg);
+  /* nearest segment (in screen pixels) over visible layers */
+  function nearestSegment(ll, skip, maxPx) {
+    const p0 = map.latLngToContainerPoint(ll); let best = null;
+    LG.layers().forEach(l => {
+      if (!l.visible) return;
+      LG.features(l.id).forEach(f => {
+        if (!f || !f.geometry || (skip && skip(l, f))) return;
+        parts(f.geometry).forEach(g => {
+          const rings = g.type === 'LineString' ? [g.coordinates] : g.type === 'Polygon' ? g.coordinates : [];
+          rings.forEach(r => { for (let i = 0; i < r.length - 1; i++) {
+            const a = map.latLngToContainerPoint(toLL(r[i])), b = map.latLngToContainerPoint(toLL(r[i + 1])), dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+            let t = l2 ? ((p0.x - a.x) * dx + (p0.y - a.y) * dy) / l2 : 0; t = Math.max(0, Math.min(1, t)); const d = Math.hypot(p0.x - (a.x + t * dx), p0.y - (a.y + t * dy));
+            if (d <= (maxPx || 30) && (!best || d < best.d)) best = { d, a: r[i], b: r[i + 1], feature: f, geom: g, layerId: l.id };
+          } });
+        });
+      });
+    });
+    return best;
+  }
+  const skipPicked = ctx => (l, f) => l.id === ctx.layerId && ctx.items.some(it => it.key === String(f.id));
+
+  /* ============== CREATE SHAPES (circle, rectangle, triangle) ============== */
+  const SHAPES = (function () {
+
+    const R = 6378137, rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
+  const STYLE = { Circle: '#2563eb', Rectangle: '#dc2626', Triangle: '#16a34a' };
+  const LAYER = { Circle: 'Circles', Rectangle: 'Rectangles', Triangle: 'Triangles' };
+  const ICON = {
+    Circle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>',
+    Rectangle: '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg>',
+    Triangle: '<svg viewBox="0 0 24 24"><path d="M12 4 L21 20 L3 20 Z"/></svg>'
+  };
+  const layerIds = {}; let active = null, session = null;
+  const cont = map.getContainer();
+
+  function dest(c, bearing, dist) {                       // point at distance (m) and bearing (radians) from c
+    const d = dist / R, la1 = rad(c.lat), lo1 = rad(c.lng);
+    const la2 = Math.asin(Math.sin(la1) * Math.cos(d) + Math.cos(la1) * Math.sin(d) * Math.cos(bearing));
+    const lo2 = lo1 + Math.atan2(Math.sin(bearing) * Math.sin(d) * Math.cos(la1), Math.cos(d) - Math.sin(la1) * Math.sin(la2));
+    return L.latLng(deg(la2), ((deg(lo2) + 540) % 360) - 180);
+  }
+  const ring = pts => { const r = pts.map(p => [Number(p.lng.toFixed(8)), Number(p.lat.toFixed(8))]); r.push(r[0].slice()); return r; };
+  function areaM2(pts) {                                  // spherical polygon area
+    let a = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += rad(q.lng - p.lng) * (2 + Math.sin(rad(p.lat)) + Math.sin(rad(q.lat))); }
+    return Math.abs(a * R * R / 2);
+  }
+  function shapePoints(kind, a, b) {                      // a = press point, b = current point
+    if (kind === 'Circle') { const r = a.distanceTo(b); return { pts: Array.from({ length: 72 }, (_, i) => dest(a, rad(i * 5), r)), radius: r }; }
+    const n = Math.max(a.lat, b.lat), s = Math.min(a.lat, b.lat), w = Math.min(a.lng, b.lng), e = Math.max(a.lng, b.lng);
+    if (kind === 'Rectangle') return { pts: [L.latLng(n, w), L.latLng(n, e), L.latLng(s, e), L.latLng(s, w)] };
+    return { pts: [L.latLng(n, (w + e) / 2), L.latLng(s, e), L.latLng(s, w)] };
+  }
+  function toFeature(kind, sh) {
+    const p = { shape: kind, area_m2: Math.round(areaM2(sh.pts) * 100) / 100 };
+    if (sh.radius != null) p.radius_m = Math.round(sh.radius * 100) / 100;
+    return { type: 'Feature', properties: p, geometry: { type: 'Polygon', coordinates: [ring(sh.pts)] } };
+  }
+
+  function saveShape(kind, sh) {
+    const feat = toFeature(kind, sh), fc = { type: 'FeatureCollection', features: [feat] };
+    const id = layerIds[kind], exists = id != null && LG.layers().some(l => l.id === id);
+    if (exists && LG.appendGeoJSON) { LG.appendGeoJSON(id, fc); return; }
+    const c = map.getCenter(), z = map.getZoom(), before = LG.layers().length;
+    LG.addGeoJSON(fc, LAYER[kind]);
+    map.setView(c, z, { animate: false });                // importing zooms to the new layer; keep the view where it was
+    const all = LG.layers(); if (all.length > before) {
+      const nl = all[all.length - 1]; layerIds[kind] = nl.id;
+      LG.setStyle(nl.id, { line: STYLE[kind], fill: STYLE[kind], fillOp: 0.2, weight: 2, dash: 'solid', lineOp: 1 });
+    }
+  }
+
+  function mark() { document.querySelectorAll('#lgxPanel .lgx-b[data-shape]').forEach(b => b.classList.toggle('on', b.dataset.shape === active)); }
+
+  const toLL = ev => map.mouseEventToLatLng(ev);
+  function onDown(ev) {
+    if (!active || (ev.button != null && ev.button !== 0)) return;
+    if (ev.target.closest && ev.target.closest('.leaflet-control, .leaflet-popup')) return;
+    ev.preventDefault(); ev.stopPropagation();
+    session = { kind: active, a: toLL(ev), prev: null, moved: false };
+    try { cont.setPointerCapture(ev.pointerId); } catch (e) { /* not needed on all browsers */ }
+  }
+  function onMove(ev) {
+    if (!session) return; ev.preventDefault();
+    const b = toLL(ev), sh = shapePoints(session.kind, session.a, b); session.moved = true; session.last = b;
+    if (session.prev) map.removeLayer(session.prev);
+    session.prev = L.polygon(sh.pts, { color: STYLE[session.kind], weight: 2, dashArray: '5 4', fillOpacity: 0.15, interactive: false }).addTo(map);
+    LG.setMsg(session.kind + (sh.radius != null ? ' radius ' + (sh.radius >= 1000 ? (sh.radius / 1000).toFixed(2) + ' km' : sh.radius.toFixed(1) + ' m') : ' ' + Math.round(areaM2(sh.pts)).toLocaleString() + ' m²'));
+  }
+  function onUp(ev) {
+    if (!session) return; ev.preventDefault(); ev.stopPropagation();
+    const s = session; session = null; if (s.prev) map.removeLayer(s.prev);
+    const b = s.last || toLL(ev), sh = shapePoints(s.kind, s.a, b);
+    if (!s.moved || s.a.distanceTo(b) < 0.5) { LG.toast('Press and drag to size the ' + s.kind.toLowerCase() + '.', 'warn'); return; }
+    try { saveShape(s.kind, sh); LG.toast(s.kind + ' added to the layer “' + LAYER[s.kind] + '”. Draw another, or press Esc to stop.'); }
+    catch (e) { LG.toast('Could not add the shape: ' + (e.message || e), 'err'); }
+  }
+  const swallowClick = ev => { if (active) { ev.stopPropagation(); } };
+  const onKey = ev => { if (ev.key === 'Escape' && active) stop(); };
+
+  function start(kind) {
+    cancelInteract(); stop(); active = kind; mark();
+    map.dragging.disable(); cont.style.cursor = 'crosshair'; cont.style.touchAction = 'none';
+    LG.toast(kind === 'Circle' ? 'Circle: press at the centre and drag outwards.' : kind === 'Rectangle' ? 'Rectangle: press at one corner and drag to the opposite corner.' : 'Triangle: press and drag a box – the triangle fills it.');
+  }
+  function stop() {
+    if (session && session.prev) map.removeLayer(session.prev); session = null;
+    if (!active) return; active = null; mark();
+    map.dragging.enable(); cont.style.cursor = ''; cont.style.touchAction = '';
+  }
+  cont.addEventListener('pointerdown', onDown, true);
+  cont.addEventListener('pointermove', onMove, true);
+  cont.addEventListener('pointerup', onUp, true);
+  cont.addEventListener('click', swallowClick, true);
+  document.addEventListener('keydown', onKey);
+
+
+  return { start, stop, get active() { return active; } };
+  })();
+
+  /* =============================== ALIGNMENT =============================== */
+  async function tMove() {
+    const c = need(); if (!c) return;
+    const v = await ask('Move', [{ k: 'e', label: 'East (+) / West (−)', type: 'number', value: 0 }, { k: 'n', label: 'North (+) / South (−)', type: 'number', value: 0 }, unitField]); if (!v) return;
+    const g = geomsOf(c), pr = projFor(g), f = UNIT[v.u], dx = v.e * f, dy = v.n * f;
+    if (commit(c, g.map(x => xform(x, pr, p => [p[0] + dx, p[1] + dy])), 'moved')) ok('Moved ' + c.items.length + ' feature(s).');
+  }
+  async function tMoveTo() {
+    const c = need(); if (!c) return; const g = geomsOf(c), cen = centerOfBox(bboxOf(g));
+    const v = await ask('Move to', [{ k: 'a', label: 'Anchor (the part of the selection that lands on the new location)', type: 'select', options: ['Center of selection', 'First vertex of the first feature'] }, { k: 'p', label: 'Destination (longitude, latitude)', type: 'point', value: cen[0].toFixed(7) + ', ' + cen[1].toFixed(7) }]); if (!v) return;
+    const anchor = v.a === 'Center of selection' ? cen : firstVertex(g[0]), pr = mkProj(anchor[0], anchor[1]), vec = pr.fwd(v.p);
+    if (commit(c, g.map(x => xform(x, pr, p => [p[0] + vec[0], p[1] + vec[1]])), 'moved')) ok('Moved to ' + v.p[0].toFixed(6) + ', ' + v.p[1].toFixed(6) + '.');
+  }
+  async function tRotate() {
+    const c = need(); if (!c) return;
+    const v = await ask('Rotate', [{ k: 'a', label: 'Angle in degrees (positive = counter-clockwise)', type: 'number', value: 90 }, { k: 'p', label: 'Rotate about', type: 'select', options: PIV }]); if (!v) return;
+    const g = geomsOf(c), piv = await pivotFor(g, v.p); if (!piv) return; const pr = mkProj(piv[0], piv[1]), a = v.a * D2R;
+    if (commit(c, g.map(x => xform(x, pr, p => rotPt(p, [0, 0], a))), 'rotated')) ok('Rotated by ' + v.a + '°.');
+  }
+  async function tScale() {
+    const c = need(); if (!c) return;
+    const v = await ask('Scale', [{ k: 'f', label: 'Scale factor (2 = twice as big, 0.5 = half)', type: 'number', value: 2 }, { k: 'fy', label: 'Different factor for north–south (optional)', type: 'number', optional: true }, { k: 'p', label: 'Scale about', type: 'select', options: PIV }]); if (!v) return;
+    if (v.f <= 0 || (v.fy != null && v.fy <= 0)) { T('The scale factor must be greater than zero.', 'warn'); return; }
+    const g = geomsOf(c), piv = await pivotFor(g, v.p); if (!piv) return; const pr = mkProj(piv[0], piv[1]), fy = v.fy == null ? v.f : v.fy;
+    if (commit(c, g.map(x => xform(x, pr, p => [p[0] * v.f, p[1] * fy])), 'scaled')) ok('Scaled.');
+  }
+  async function tTransform() {
+    const c = need(); if (!c) return;
+    const v = await ask('Transform (scale, rotate, then move)', [{ k: 's', label: 'Scale factor', type: 'number', value: 1 }, { k: 'a', label: 'Rotate (degrees, counter-clockwise)', type: 'number', value: 0 }, { k: 'e', label: 'Move east (+) / west (−)', type: 'number', value: 0 }, { k: 'n', label: 'Move north (+) / south (−)', type: 'number', value: 0 }, unitField, { k: 'p', label: 'Scale and rotate about', type: 'select', options: PIV }]); if (!v) return;
+    if (v.s <= 0) { T('The scale factor must be greater than zero.', 'warn'); return; }
+    const g = geomsOf(c), piv = await pivotFor(g, v.p); if (!piv) return; const pr = mkProj(piv[0], piv[1]), a = v.a * D2R, f = UNIT[v.u];
+    if (commit(c, g.map(x => xform(x, pr, p => { const q = rotPt([p[0] * v.s, p[1] * v.s], [0, 0], a); return [q[0] + v.e * f, q[1] + v.n * f]; })), 'transformed')) ok('Transformed.');
+  }
+  async function tAlignFeatures() {
+    const c = need({ min: 2 }); if (!c) return;
+    const v = await ask('Align features', [{ k: 'm', label: 'Align', type: 'select', options: ['Left edges', 'Right edges', 'Top edges', 'Bottom edges', 'Centers horizontally (same east–west position)', 'Centers vertically (same north–south position)', 'Distribute evenly left to right', 'Distribute evenly top to bottom'] }, { k: 'r', label: 'Line up with', type: 'select', options: ['The extent of the whole selection', 'The first selected feature'] }]); if (!v) return;
+    const g = geomsOf(c), pr = projFor(g), box = x => { const b = [Infinity, Infinity, -Infinity, -Infinity]; eachC(mapC(x, pr.fwd), p => { b[0] = Math.min(b[0], p[0]); b[1] = Math.min(b[1], p[1]); b[2] = Math.max(b[2], p[0]); b[3] = Math.max(b[3], p[1]); }); return b; };
+    const bx = g.map(box), ref = v.r.indexOf('first') >= 0 ? bx[0] : [Math.min(...bx.map(b => b[0])), Math.min(...bx.map(b => b[1])), Math.max(...bx.map(b => b[2])), Math.max(...bx.map(b => b[3]))];
+    const d = bx.map(() => [0, 0]), m = v.m;
+    if (m.startsWith('Left')) bx.forEach((b, i) => d[i][0] = ref[0] - b[0]);
+    else if (m.startsWith('Right')) bx.forEach((b, i) => d[i][0] = ref[2] - b[2]);
+    else if (m.startsWith('Top')) bx.forEach((b, i) => d[i][1] = ref[3] - b[3]);
+    else if (m.startsWith('Bottom')) bx.forEach((b, i) => d[i][1] = ref[1] - b[1]);
+    else if (m.startsWith('Centers horizontally')) bx.forEach((b, i) => d[i][0] = (ref[0] + ref[2]) / 2 - (b[0] + b[2]) / 2);
+    else if (m.startsWith('Centers vertically')) bx.forEach((b, i) => d[i][1] = (ref[1] + ref[3]) / 2 - (b[1] + b[3]) / 2);
+    else {
+      if (bx.length < 3) { T('Select at least three features to distribute them.', 'warn'); return; }
+      const ax = m.indexOf('left to right') >= 0 ? 0 : 1, cs = bx.map((b, i) => ({ i, c: (b[ax] + b[ax + 2]) / 2 })).sort((p, q) => p.c - q.c), lo = cs[0].c, hi = cs[cs.length - 1].c;
+      cs.forEach((o, k) => { d[o.i][ax] = lo + (hi - lo) * k / (cs.length - 1) - o.c; });
+    }
+    if (commit(c, g.map((x, i) => xform(x, pr, p => [p[0] + d[i][0], p[1] + d[i][1]])), 'aligned')) ok('Aligned ' + c.items.length + ' features.');
+  }
+  async function tAlignEdge() {
+    const c = need(); if (!c) return;
+    const a = await pickPoint('Step 1 of 2: click an edge of the selected feature(s) that you want to line up.'); if (!a) return;
+    const src = nearestSegment(a, (l, f) => !(l.id === c.layerId && c.items.some(it => it.key === String(f.id))), 40); if (!src) { T('No edge of the selected features was near that click.', 'warn'); return; }
+    const b = await pickPoint('Step 2 of 2: click the reference edge to line up with.'); if (!b) return;
+    const ref = nearestSegment(b, skipPicked(c), 40); if (!ref) { T('No reference edge was near that click.', 'warn'); return; }
+    const g = geomsOf(c), mid = [(src.a[0] + src.b[0]) / 2, (src.a[1] + src.b[1]) / 2], pr = mkProj(mid[0], mid[1]);
+    const s0 = pr.fwd(src.a), s1 = pr.fwd(src.b), r0 = pr.fwd(ref.a), r1 = pr.fwd(ref.b);
+    let rot = Math.atan2(r1[1] - r0[1], r1[0] - r0[0]) - Math.atan2(s1[1] - s0[1], s1[0] - s0[0]); while (rot > Math.PI / 2) rot -= Math.PI; while (rot < -Math.PI / 2) rot += Math.PI;
+    const dir = norm(sub(r1, r0)), nrm = [-dir[1], dir[0]], off = (0 - r0[0]) * nrm[0] + (0 - r0[1]) * nrm[1];     // mid-point is at the origin
+    if (commit(c, g.map(x => xform(x, pr, p => { const q = rotPt(p, [0, 0], rot); return [q[0] - nrm[0] * off, q[1] - nrm[1] * off]; })), 'edge aligned')) ok('Edge aligned (rotated ' + (rot / D2R).toFixed(2) + '°).');
+  }
+  async function tRubber() {
+    const c = need(); if (!c) return; const g = geomsOf(c), pr = projFor(g), links = [], lg = L.layerGroup().addTo(map);
+    try {
+      for (;;) {
+        const a = await pickPoint('Link ' + (links.length + 1) + ': click a point on the feature to move' + (links.length ? '. Press Enter to apply ' + links.length + ' link(s)' : '') + '.', { allowDone: true });
+        if (a === 'done') break; if (!a) { lg.remove(); return; }
+        L.circleMarker(a, { radius: 5, color: '#dc2626', interactive: false }).addTo(lg);
+        const b = await pickPoint('Link ' + (links.length + 1) + ': now click where that point should go.'); if (!b) { lg.remove(); return; }
+        L.polyline([a, b], { color: '#dc2626', weight: 2, interactive: false }).addTo(lg); L.circleMarker(b, { radius: 5, color: '#16a34a', fillOpacity: 1, interactive: false }).addTo(lg);
+        const pa = pr.fwd(toC(a)), pb = pr.fwd(toC(b)); links.push({ a: pa, d: [pb[0] - pa[0], pb[1] - pa[1]] });
+      }
+    } finally { /* keep markers until applied */ }
+    lg.remove(); if (!links.length) { T('Add at least one link first.', 'warn'); return; }
+    if (commit(c, g.map(x => xform(x, pr, p => rubber(p, links))), 'rubbersheeted')) ok('Rubbersheeted with ' + links.length + ' link(s). Points near a link follow it closely; far points follow the average.');
+  }
+
+  /* ================================ RESHAPE ================================ */
+  function tVertices() {
+    const c = LG.picked(); if (!c || !c.items.length) { T('Select one feature first, then press Edit Vertices.', 'warn'); return; }
+    if (!c.editable) { T('“' + c.name + '” is read-only. Use Copy to editable first.', 'warn'); return; }
+    if (c.items.length > 1) { T('Select only one feature to edit its vertices.', 'warn'); return; }
+    const b = document.getElementById('btnVertex'); if (b) b.click();
+    T('Edit Vertices: drag a dot to move a corner, drag a pale middle dot to add one, right-click or double-click a dot to delete it. Press Pan to finish.');
+  }
+  async function tReshape() {
+    const c = need({ kinds: ['polygon', 'line'], max: 1 }); if (!c) return; const g = c.items[0].feature.geometry;
+    const sk = await pickPath(g.type === 'Polygon' ? 'Sketch the new edge: start and end it outside or on the boundary so it crosses the boundary twice. Double-click or Enter to finish.' : 'Sketch the new path: start and end near the line. Double-click or Enter to finish.', { min: 2 }); if (!sk) return;
+    const pr = projFor([g]), S = sk.map(pr.fwd); let res = null;
+    if (g.type === 'Polygon') { const r = reshapePoly(pr.fwd ? g.coordinates[0].map(pr.fwd) : null, S); if (!r) { T('The sketch must cross the polygon boundary at least twice.', 'warn'); return; } res = { type: 'Polygon', coordinates: [r.map(pr.inv)].concat(g.coordinates.slice(1)) }; }
+    else res = { type: 'LineString', coordinates: reshapeLine(g.coordinates.map(pr.fwd), S).map(pr.inv) };
+    if (commit(c, [res], 'reshaped')) ok('Reshaped.');
+  }
+  async function tReplace() {
+    const c = need({ max: 1 }); if (!c) return; const k = c.kind; let g = null;
+    if (k === 'point') { const ll = await pickPoint('Click the new location of the point.'); if (!ll) return; g = { type: 'Point', coordinates: toC(ll) }; }
+    else { const p = await pickPath('Draw the new ' + (k === 'polygon' ? 'outline' : 'line') + ': click each vertex. Double-click or Enter to finish.', { min: k === 'polygon' ? 3 : 2, kind: k }); if (!p) return; g = k === 'polygon' ? { type: 'Polygon', coordinates: [closeRing(p)] } : { type: 'LineString', coordinates: p }; }
+    if (commit(c, [g], 'replaced')) ok('Geometry replaced. The attributes were kept.');
+  }
+  async function tContinue() {
+    const c = need({ kinds: ['line'], max: 1 }); if (!c) return; const co = c.items[0].feature.geometry.coordinates;
+    const near = await pickPoint('Click near the end of the line that you want to continue.'); if (!near) return;
+    const first = dist(toC(near), co[0]) < dist(toC(near), co[co.length - 1]), e = first ? co[0] : co[co.length - 1];
+    const p = await pickPath('Click the new vertices, starting from the highlighted end. Double-click or Enter to finish.', { min: 2, prefix: [e] }); if (!p) return;
+    const add = p.slice(1), out = first ? add.reverse().concat(co) : co.concat(add);
+    if (commit(c, [{ type: 'LineString', coordinates: out }], 'continued')) ok('Line continued by ' + add.length + ' vertex(es).');
+  }
+  async function tExtendTrim() {
+    const c = need({ kinds: ['line'], max: 1 }); if (!c) return; const co = c.items[0].feature.geometry.coordinates;
+    const b = await pickPoint('Step 1 of 2: click the boundary feature (any line or polygon edge) to extend to or trim at.'); if (!b) return;
+    const seg = nearestSegment(b, skipPicked(c), 40); if (!seg) { T('No boundary feature was near that click.', 'warn'); return; }
+    const k = await pickPoint('Step 2 of 2: click the part of the line to trim away, or the end of the line to extend.'); if (!k) return;
+    const pr = projFor([c.items[0].feature.geometry]), bounds = [];
+    parts(seg.feature.geometry).forEach(x => { if (x.type === 'LineString') bounds.push(x.coordinates.map(pr.fwd)); else if (x.type === 'Polygon') x.coordinates.forEach(r => bounds.push(r.map(pr.fwd))); });
+    const r = trimExtend(co.map(pr.fwd), bounds, pr.fwd(toC(k)));
+    if (!r.lines.length) { T(r.mode === 'extend' ? 'The line does not reach that boundary when extended.' : 'Nothing was left after trimming.', 'warn'); return; }
+    if (commit(c, [r.lines.map(l => ({ type: 'LineString', coordinates: l.map(pr.inv) }))], r.mode === 'trim' ? 'trimmed' : 'extended')) ok(r.mode === 'trim' ? 'Trimmed.' : 'Extended to the boundary.');
+  }
+  async function tFillet() {
+    const c = need({ kinds: ['polygon', 'line'] }); if (!c) return;
+    const v = await ask('Fillet (round corners)', [{ k: 'r', label: 'Radius', type: 'number', value: 5, min: 0 }, unitField, { k: 'm', label: 'Corners', type: 'select', options: ['All corners', 'Only the corner nearest a click'] }]); if (!v) return;
+    const g = geomsOf(c), pr = projFor(g), r = v.r * UNIT[v.u]; let clickP = null;
+    if (v.m !== 'All corners') { const ll = await pickPoint('Click near the corner you want to round.'); if (!ll) return; clickP = pr.fwd(toC(ll)); }
+    const pick = P => { if (!clickP) return null; let bi = 0, bd = Infinity; P.forEach((p, i) => { const d = dist(p, clickP); if (d < bd) { bd = d; bi = i; } }); return bi; };
+    const res = g.map(x => {
+      const o = mapRings(x, pr, (ring, closed) => { const P = closed ? ring.slice(0, -1) : ring, only = clickP ? pick(P) : null, f = filletPath(P, closed, r, only); return closed ? f.concat([f[0].slice()]) : f; });
+      return o;
+    });
+    if (commit(c, res, 'filleted')) ok('Corners rounded.');
+  }
+  /* apply fn(ring, closed) to each ring/line of a projected geometry */
+  function mapRings(g, pr, fn) {
+    if (g.type === 'LineString') return { type: g.type, coordinates: fn(g.coordinates.map(pr.fwd), false).map(pr.inv) };
+    if (g.type === 'Polygon') return { type: g.type, coordinates: g.coordinates.map(r => fn(r.map(pr.fwd), true).map(pr.inv)) };
+    return g;
+  }
+  async function tGeneralize() {
+    const c = need({ kinds: ['polygon', 'line'] }); if (!c) return;
+    const v = await ask('Generalize (remove vertices)', [{ k: 't', label: 'Maximum offset allowed', type: 'number', value: 2, min: 0 }, unitField, { k: 'n', type: 'note', label: 'Uses the Douglas–Peucker method: vertices that change the shape by less than this distance are removed.' }]); if (!v) return;
+    const g = geomsOf(c), pr = projFor(g), tol = v.t * UNIT[v.u]; let before = 0, after = 0;
+    const res = g.map(x => mapRings(x, pr, (ring, closed) => { before += ring.length; const o = closed ? dpRing(ring, tol) : dpOpen(ring, tol); after += o.length; return o; }));
+    if (commit(c, res, 'generalized')) ok('Vertices: ' + before + ' → ' + after + '.');
+  }
+  async function tSmooth() {
+    const c = need({ kinds: ['polygon', 'line'] }); if (!c) return;
+    const v = await ask('Smooth', [{ k: 'i', label: 'Smoothing passes (1 = slight, 4 = very round)', type: 'number', value: 2, min: 1, max: 5, step: 1 }, { k: 'n', type: 'note', label: 'Corners are cut with the Chaikin method. The ends of lines stay where they are.' }]); if (!v) return;
+    const it = Math.max(1, Math.min(5, Math.round(v.i)));
+    if (commit(c, geomsOf(c).map(x => mapRings(x, { fwd: p => p, inv: p => p }, (ring, closed) => chaikin(ring, closed, it))), 'smoothed')) ok('Smoothed.');
+  }
+
+  /* ================================ DIVIDE ================================= */
+  async function tSplit() {
+    const c = need({ kinds: ['polygon', 'line'] }); if (!c) return; const g = geomsOf(c);
+    if (c.kind === 'line') {
+      const ll = await pickPoint('Click the point where the line should be split.'); if (!ll) return;
+      const res = g.map(x => { const pr = projFor([x]), co = x.coordinates.map(pr.fwd), n = nearestOnLine(co, pr.fwd(toC(ll))); if (n.d > 60) return null; return splitAtPoints(co, [n.pt], 1e-3).map(l => ({ type: 'LineString', coordinates: l.map(pr.inv) })); });
+      if (!res.some(Boolean)) { T('The click was not on a selected line.', 'warn'); return; } if (commit(c, res, 'split')) ok('Line split.'); return;
+    }
+    if (!(await needLib())) return;
+    const sk = await pickPath('Draw the cutting line so that it crosses the polygon from one side to the other. Double-click or Enter to finish.', { min: 2 }); if (!sk) return;
+    const res = g.map(x => {
+      const pr = projFor([x]), P = mapC(x, pr.fwd), S = { type: 'LineString', coordinates: sk.map(pr.fwd) };
+      const pj = toJ(P), U = pj.getBoundary().union(toJ(S)), pz = new (JS().operation.polygonize.Polygonizer)(); pz.add(U);
+      const faces = jlist(pz.getPolygons()).filter(f => pj.contains(f.getInteriorPoint()));
+      if (faces.length < 2) return null; return faces.map(f => mapC(fromJ(f), p => pr.inv(p)));
+    });
+    if (!res.some(Boolean)) { T('The line did not cut across the polygon. Draw it so it starts and ends outside.', 'warn'); return; }
+    if (commit(c, res, 'split')) ok('Polygon split into ' + res.reduce((n, r) => n + (r ? r.length : 0), 0) + ' parts. The first part kept the original record; the others are new features with copied attributes.');
+  }
+  async function tExplode() {
+    const c = need(); if (!c) return; const opts = c.kind === 'polygon' ? ['Boundary lines', 'Each edge as its own line', 'Vertices as points', 'Separate the parts of multi-part features'] : c.kind === 'line' ? ['Each segment as its own line', 'Vertices as points', 'Separate the parts of multi-part features'] : ['Separate the parts of multi-part features'];
+    const v = await ask('Explode', [{ k: 'm', label: 'Explode into', type: 'select', options: opts }, { k: 'd', label: 'Delete the original features afterwards', type: 'check', value: false }]); if (!v) return;
+    const out = { line: [], point: [] }, props = [];
+    c.items.forEach(it => {
+      const g = it.feature.geometry, P = it.feature.properties;
+      if (v.m.startsWith('Boundary')) parts(g).forEach(p => p.coordinates.forEach(r => out.line.push({ geometry: { type: 'LineString', coordinates: r }, properties: P })));
+      else if (v.m.startsWith('Each')) parts(g).forEach(p => (g.type === 'Polygon' ? p.coordinates : [p.coordinates]).forEach(r => { for (let i = 0; i < r.length - 1; i++) out.line.push({ geometry: { type: 'LineString', coordinates: [r[i], r[i + 1]] }, properties: P }); }));
+      else if (v.m.startsWith('Vertices')) { const seen = {}; eachC(g, p => { const k = p[0] + ',' + p[1]; if (!seen[k]) { seen[k] = 1; out.point.push({ geometry: { type: 'Point', coordinates: p }, properties: P }); } }); }
+      else parts(g).forEach(p => (out[c.kind] = out[c.kind] || []).push({ geometry: p, properties: P }));
+    });
+    let n = 0;
+    if (out.line.length) { emit('line', c.name + ' (exploded)', out.line, { style: { line: '#c2410c', weight: 2, dash: 'solid', lineOp: 1 } }); n += out.line.length; }
+    if (out.point.length) { emit('point', c.name + ' (vertices)', out.point); n += out.point.length; }
+    if (out.polygon && out.polygon.length) { emit('polygon', c.name + ' (parts)', out.polygon); n += out.polygon.length; }
+    if (v.d && c.editable) LG.edit(c.layerId, c.items.map(i => ({ op: 'delete', key: i.key })));
+    ok('Exploded into ' + n + ' new feature(s).');
+  }
+  async function tClip() {
+    const c = need(); if (!c) return; if (!(await needLib())) return;
+    const v = await ask('Clip', [{ k: 'w', label: 'Clip with', type: 'select', options: ['A polygon I click on the map', 'A polygon I sketch'] }, { k: 'k', label: 'Keep', type: 'select', options: ['The part inside the clip polygon', 'The part outside the clip polygon (erase)'] }]); if (!v) return;
+    let clip = null;
+    if (v.w.startsWith('A polygon I click')) {
+      const ll = await pickPoint('Click inside the polygon to clip with.'); if (!ll) return; const skip = skipPicked(c);
+      LG.layers().slice().reverse().some(l => l.visible && LG.features(l.id).some(f => { if (!f || !f.geometry || skip(l, f)) return false; const p = parts(f.geometry).find(x => x.type === 'Polygon' && pip(toC(ll), x)); if (p) { clip = p; return true; } return false; }));
+      if (!clip) { T('No polygon was found under that click.', 'warn'); return; }
+    } else { const p = await pickPath('Sketch the clip polygon. Double-click or Enter to finish.', { min: 3, kind: 'polygon' }); if (!p) return; clip = { type: 'Polygon', coordinates: [closeRing(p)] }; }
+    const inside = v.k.startsWith('The part inside');
+    const res = geomsOf(c).map(x => { const pr = projFor([x]), a = toJ(mapC(x, pr.fwd)), b = toJ(mapC(clip, pr.fwd)); const r = inside ? a.intersection(b) : a.difference(b); return r.isEmpty() ? [] : mapC(fromJ(r), pr.inv); });
+    if (commit(c, res, 'clipped')) ok('Clipped. Features that ended up empty were removed.');
+  }
+  async function tPlanarize() {
+    const c = need({ kinds: ['line'], min: 2 }); if (!c) return; const g = geomsOf(c), pr = projFor(g);
+    const lines = g.map(x => (x.type === 'LineString' ? x.coordinates : parts(x)[0].coordinates).map(pr.fwd)), res = planarize(lines, 1e-4);
+    const n = res.reduce((s, r) => s + r.length, 0);
+    if (commit(c, res.map(r => r.map(l => ({ type: 'LineString', coordinates: l.map(pr.inv) }))), 'planarized')) ok('Lines were split at every crossing and touch: ' + c.items.length + ' → ' + n + ' pieces (attributes copied).');
+  }
+  async function tConstruct() {
+    const c = need({ kinds: ['line', 'polygon'] }); if (!c) return; if (!(await needLib())) return;
+    const g = geomsOf(c), pr = projFor(g), lines = [];
+    g.forEach(x => parts(x).forEach(p => { if (p.type === 'LineString') lines.push(p.coordinates.map(pr.fwd)); else if (p.type === 'Polygon') p.coordinates.forEach(r => lines.push(r.map(pr.fwd))); }));
+    const U = toJ({ type: 'MultiLineString', coordinates: lines }).union(), pz = new (JS().operation.polygonize.Polygonizer)(); pz.add(U);
+    const polys = jlist(pz.getPolygons()).map(p => mapC(fromJ(p), q => pr.inv(q)));
+    if (!polys.length) { T('No closed areas could be built. The lines must form closed rings (they may cross each other).', 'warn'); return; }
+    emit('polygon', 'Constructed polygons', polys.map(p => ({ geometry: p, properties: {} })), { style: { line: '#7c3aed', fill: '#7c3aed', fillOp: 0.25, weight: 2, dash: 'solid', lineOp: 1 } }); ok('Built ' + polys.length + ' polygon(s).');
+  }
+
+  /* =============================== CONSTRUCT =============================== */
+  async function tMerge() {
+    const c = need({ kinds: ['polygon', 'line'], min: 2 }); if (!c) return; if (!(await needLib())) return;
+    const g = geomsOf(c), pr = projFor(g), J = g.map(x => toJ(mapC(x, pr.fwd))); let U = J[0];
+    for (let i = 1; i < J.length; i++) U = U.union(J[i]);
+    let out;
+    if (c.kind === 'line') { const lm = new (JS().operation.linemerge.LineMerger)(); lm.add(U); out = jlist(lm.getMergedLineStrings()).map(x => fromJ(x)); } else out = parts(fromJ(U));
+    out = out.map(x => mapC(x, pr.inv));
+    const res = c.items.map((_, i) => i === 0 ? out : []);
+    if (commit(c, res, 'merged')) ok('Merged ' + c.items.length + ' features into ' + out.length + '. The first feature kept its attributes' + (out.length > 1 ? '; separate pieces became extra features.' : '.'));
+  }
+  async function tBuffer() {
+    const c = need(); if (!c) return; if (!(await needLib())) return;
+    const v = await ask('Buffer', [{ k: 'd', label: 'Distance (negative shrinks polygons)', type: 'number', value: 10 }, unitField, { k: 's', label: 'Smoothness of round corners (segments per quarter circle)', type: 'number', value: 8, min: 1, max: 32, step: 1 }, { k: 'c', label: 'Line ends', type: 'select', options: ['Round', 'Flat', 'Square'] }, { k: 'u2', label: 'Merge all buffers into one shape', type: 'check', value: false }]); if (!v) return;
+    const cap = { Round: 1, Flat: 2, Square: 3 }[v.c], d = v.d * UNIT[v.u], feats = [];
+    c.items.forEach(it => { const g = it.feature.geometry, pr = projFor([g]), r = toJ(mapC(g, pr.fwd)).buffer(d, Math.round(v.s), cap); if (!r.isEmpty()) parts(mapC(fromJ(r), pr.inv)).forEach(p => feats.push({ geometry: p, properties: Object.assign({}, it.feature.properties, { BUFFER_M: Math.round(d * 100) / 100 }) })); });
+    if (v.u2 && feats.length > 1) { const pr = projFor(geomsOf(c)); let U = toJ(mapC(feats[0].geometry, pr.fwd)); feats.slice(1).forEach(f => { U = U.union(toJ(mapC(f.geometry, pr.fwd))); }); const m = parts(mapC(fromJ(U), pr.inv)); feats.length = 0; m.forEach(p => feats.push({ geometry: p, properties: { BUFFER_M: Math.round(d * 100) / 100 } })); }
+    if (!feats.length) { T('The buffer is empty (a negative distance may have removed the whole shape).', 'warn'); return; }
+    emit('polygon', 'Buffers', feats, { style: { line: '#9333ea', fill: '#9333ea', fillOp: 0.2, weight: 2, dash: 'solid', lineOp: 1 } }); ok('Buffer created: ' + feats.length + ' polygon(s) in the layer “Buffers”.');
+  }
+  async function tDupVertical() {
+    const c = need(); if (!c) return;
+    const v = await ask('Duplicate vertical', [{ k: 'n', label: 'Number of copies', type: 'number', value: 3, min: 1, max: 200, step: 1 }, { k: 's', label: 'Distance between copies (negative stacks downward / south)', type: 'number', value: 10 }, unitField]); if (!v) return;
+    const g = geomsOf(c), pr = projFor(g), list = [], n = Math.max(1, Math.min(200, Math.round(v.n))), s = v.s * UNIT[v.u];
+    for (let k = 1; k <= n; k++) c.items.forEach(it => list.push({ geometry: xform(it.feature.geometry, pr, p => [p[0], p[1] + k * s]), properties: it.feature.properties }));
+    if (addCopies(c, list, 'copies')) ok(n + ' vertical cop' + (n === 1 ? 'y' : 'ies') + ' added.');
+  }
+  function offsetGeom(g, pr, d) {                          // d > 0 left / outside, d < 0 right / inside
+    if (g.type === 'LineString') { const o = offsetLine(g.coordinates.map(pr.fwd), d); return o.length >= 2 ? { type: 'LineString', coordinates: o.map(pr.inv) } : null; }
+    if (g.type === 'Polygon') { const r = toJ(mapC(g, pr.fwd)).buffer(d, 8); if (r.isEmpty()) return null; return mapC(fromJ(r), pr.inv); }
+    return null;
+  }
+  async function offsetCopies(label, counts) {
+    const c = need({ kinds: ['line', 'polygon'] }); if (!c) return; if (c.kind === 'polygon' && !(await needLib())) return;
+    const f = [{ k: 'd', label: counts ? 'Distance between copies' : 'Offset distance', type: 'number', value: 10, min: 0 }, unitField, { k: 's', label: c.kind === 'line' ? 'Side' : 'Direction', type: 'select', options: c.kind === 'line' ? ['Left of the line direction', 'Right of the line direction', 'Both sides'] : ['Outside', 'Inside', 'Both'] }];
+    if (counts) f.unshift({ k: 'n', label: 'Number of copies per side', type: 'number', value: 3, min: 1, max: 50, step: 1 });
+    const v = await ask(label, f); if (!v) return; const n = counts ? Math.max(1, Math.min(50, Math.round(v.n))) : 1, step = v.d * UNIT[v.u], list = [], g = geomsOf(c), pr = projFor(g);
+    const sides = v.s.startsWith('Left') || v.s === 'Outside' ? [1] : v.s.startsWith('Right') || v.s === 'Inside' ? [-1] : [1, -1];
+    for (let k = 1; k <= n; k++) sides.forEach(sg => c.items.forEach(it => { const og = offsetGeom(it.feature.geometry, pr, sg * k * step); if (og) parts(og).forEach(p => list.push({ geometry: p, properties: it.feature.properties })); }));
+    if (addCopies(c, list, label.toLowerCase())) ok(list.length + ' feature(s) added.');
+  }
+  const tOffset = () => offsetCopies('Offset', false), tParallel = () => offsetCopies('Copy parallel', true);
+  async function tMirror() {
+    const c = need(); if (!c) return;
+    const v = await ask('Mirror', [{ k: 'a', label: 'Mirror line', type: 'select', options: ['Vertical line through the center (flip left–right)', 'Horizontal line through the center (flip top–bottom)', 'A line I draw on the map'] }, { k: 'k', label: 'Keep the original features (mirrored copies are added)', type: 'check', value: true }]); if (!v) return;
+    const g = geomsOf(c), cen = centerOfBox(bboxOf(g)); let o = cen, a = Math.PI / 2, pr;
+    if (v.a.startsWith('A line')) { const l = await pickPath('Click the two ends of the mirror line.', { min: 2, max: 2 }); if (!l) return; pr = mkProj(l[0][0], l[0][1]); const e = pr.fwd(l[1]); o = [0, 0]; a = Math.atan2(e[1], e[0]); }
+    else { pr = mkProj(cen[0], cen[1]); o = [0, 0]; a = v.a.startsWith('Vertical') ? Math.PI / 2 : 0; }
+    const flipped = g.map(x => xform(x, pr, p => reflectPt(p, o, a)));
+    if (v.k) { if (addCopies(c, c.items.map((it, i) => ({ geometry: flipped[i], properties: it.feature.properties })), 'mirrored')) ok('Mirrored copies added.'); }
+    else if (commit(c, flipped, 'mirrored')) ok('Mirrored.');
+  }
+  async function tRadial() {
+    const c = LG.picked(); const pts = c && c.kind === 'point' ? c.items.map(i => i.feature.geometry.coordinates) : [];
+    const f = [{ k: 'n', label: 'Number of lines', type: 'number', value: 8, min: 1, max: 360, step: 1 }, { k: 'l', label: 'Length of each line', type: 'number', value: 100, min: 0 }, unitField, { k: 'b', label: 'Direction of the first line (degrees clockwise from north)', type: 'number', value: 0 }, { k: 'w', label: 'Angle covered (360 = full circle)', type: 'number', value: 360, min: 1, max: 360 }];
+    if (!pts.length) f.unshift({ k: 'p', label: 'Center (longitude, latitude)', type: 'point', value: (() => { const m = map.getCenter(); return m.lng.toFixed(7) + ', ' + m.lat.toFixed(7); })() }); else f.unshift({ k: 'x', type: 'note', label: 'Lines will radiate from the ' + pts.length + ' selected point(s).' });
+    const v = await ask('Create radial lines', f); if (!v) return; const centers = pts.length ? pts : [v.p], n = Math.max(1, Math.min(360, Math.round(v.n))), feats = [], full = v.w >= 360;
+    centers.forEach(ce => { const pr = mkProj(ce[0], ce[1]); for (let k = 0; k < n; k++) { const brg = (v.b + (full ? k * 360 / n : (n === 1 ? 0 : k * v.w / (n - 1)))) * D2R, L2 = v.l * UNIT[v.u]; feats.push({ geometry: { type: 'LineString', coordinates: [ce.slice(0, 2), pr.inv([L2 * Math.sin(brg), L2 * Math.cos(brg)])] }, properties: {} }); } });
+    emit('line', 'Radial lines', feats, { intoActive: true, style: { line: '#c2410c', weight: 2, dash: 'solid', lineOp: 1 } }); ok(feats.length + ' radial line(s) created.');
+  }
+  async function tRegular() {
+    const m = map.getCenter(); const v = await ask('Create regular polygon', [{ k: 'p', label: 'Center (longitude, latitude)', type: 'point', value: m.lng.toFixed(7) + ', ' + m.lat.toFixed(7) }, { k: 'n', label: 'Number of sides', type: 'number', value: 6, min: 3, max: 100, step: 1 }, { k: 'r', label: 'Radius', type: 'number', value: 100, min: 0 }, unitField, { k: 'm', label: 'Radius is measured to', type: 'select', options: ['The corners', 'The middle of each side'] }, { k: 'b', label: 'Direction of the first corner (degrees clockwise from north)', type: 'number', value: 0 }]); if (!v) return;
+    const n = Math.max(3, Math.min(100, Math.round(v.n))), pr = mkProj(v.p[0], v.p[1]); let R = v.r * UNIT[v.u]; if (v.m.startsWith('The middle')) R = R / Math.cos(Math.PI / n);
+    const ring = regularPoly([0, 0], n, R, v.b).map(pr.inv);
+    emit('polygon', 'Regular polygons', [{ geometry: { type: 'Polygon', coordinates: [ring] }, properties: { SIDES: n } }], { intoActive: true, style: { line: '#2563eb', fill: '#2563eb', fillOp: 0.2, weight: 2, dash: 'solid', lineOp: 1 } }); ok('Regular ' + n + '-sided polygon created.');
+  }
+
+  /* ----- geometry library (JSTS) is loaded the first time a tool needs it ----- */
+  let libP = null;
+  function needLib() {
+    if (window.jsts) return Promise.resolve(true); if (libP) return libP;
+    const urls = ['https://cdn.jsdelivr.net/npm/jsts@2.12.1/dist/jsts.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jsts/2.11.0/jsts.min.js', 'https://unpkg.com/jsts@2.12.1/dist/jsts.min.js'];
+    T('Loading the geometry library (one time)…');
+    libP = new Promise(res => { let i = 0; const next = () => { if (window.jsts) { res(true); return; } if (i >= urls.length) { libP = null; T('The geometry library could not be loaded. Check your internet connection and try again. (Only Split, Clip, Merge, Buffer, Construct Polygons and polygon Offset need it.)', 'err'); res(false); return; } const s = document.createElement('script'); s.src = urls[i++]; s.onload = () => (window.jsts ? res(true) : next()); s.onerror = next; document.head.appendChild(s); }; next(); });
+    return libP;
+  }
+
+  /* ============================== TOOL PANEL ============================== */
+  const GROUPS = [
+    ['Create Shapes', [['Circle', '◯', 'Press at the center and drag outward to draw a circle', null, 1], ['Rectangle', '▭', 'Press and drag from corner to corner', null, 1], ['Triangle', '△', 'Press and drag a box; the triangle fills it', null, 1]]],
+    ['Alignment', [['Move', '✥', 'Shift the selected features by an east–west and north–south distance', tMove], ['Move To', '⌖', 'Move the selection so its center (or first vertex) lands on a location', tMoveTo], ['Rotate', '⟳', 'Rotate the selection by an angle about a pivot', tRotate], ['Scale', '⤢', 'Make the selection bigger or smaller about a pivot', tScale], ['Transform', '◇', 'Scale, rotate and move in one step', tTransform], ['Align Features', '☰', 'Line up several features (left, right, top, bottom, centers) or space them evenly', tAlignFeatures], ['Align Edge', '⊢', 'Rotate and shift the selection so one of its edges lies along a reference edge', tAlignEdge], ['Rubbersheet', '≋', 'Stretch the selection with links: “this point should go there”', tRubber]]],
+    ['Reshape', [['Edit Vertices', '◦', 'Drag, add and delete the corners of the selected feature', tVertices], ['Reshape', '∿', 'Sketch a new edge that replaces part of a line or polygon outline', tReshape], ['Replace Geometry', '⇄', 'Draw a new shape for the selected feature and keep its attributes', tReplace], ['Continue Feature', '⇢', 'Add more vertices onto the end of a line', tContinue], ['Extend or Trim', '⊣', 'Extend a line to a boundary, or trim it back at the boundary', tExtendTrim], ['Fillet', '◜', 'Round off sharp corners with a radius', tFillet], ['Generalize', '⋰', 'Remove unneeded vertices (Douglas–Peucker)', tGeneralize], ['Smooth', '∼', 'Smooth jagged lines and outlines', tSmooth]]],
+    ['Divide', [['Split', '✂', 'Cut a polygon with a drawn line, or a line at a clicked point', tSplit], ['Explode', '✺', 'Break features into edges, boundary lines, vertex points or single parts', tExplode], ['Clip', '▣', 'Cut the selection with a polygon (keep inside or outside)', tClip], ['Planarize', '⌗', 'Split lines at every place they cross or touch', tPlanarize], ['Construct Polygons', '⬡', 'Build polygons from closed rings of lines', tConstruct]]],
+    ['Construct', [['Merge', '⊕', 'Join the selected polygons (or lines) into one feature', tMerge], ['Buffer', '◎', 'Make polygons around features at a distance', tBuffer], ['Duplicate Vertical', '⇈', 'Stack copies of the selection above (or below) it', tDupVertical], ['Offset', '⇉', 'Add a copy of a line or polygon outline at a set distance', tOffset], ['Mirror', '⇋', 'Flip the selection across a line', tMirror], ['Copy Parallel', '∥', 'Add several parallel copies of lines or outlines', tParallel], ['Create Radial', '✳', 'Create lines that spread out from a point like spokes', tRadial], ['Create Regular Polygon', '⬠', 'Create a triangle, square, hexagon… from a center and radius', tRegular]]]
+  ];
+  GROUPS[0][1].forEach(t => { t[3] = () => SHAPES.start(t[0]); });
+  window.__lgxTools = {}; GROUPS.forEach(g => g[1].forEach(t => { window.__lgxTools[t[0]] = t[3]; }));
+  let panel = null;
+  function selText() { const c = LG.picked(); return c && c.items.length ? '<b>' + c.items.length + '</b> ' + c.kind + (c.items.length === 1 ? '' : 's') + ' selected in “' + esc(c.name) + '”' + (c.editable ? '' : ' <i>(read-only – results go to a new layer)</i>') : 'Nothing selected. Use <b>Select</b> on the ribbon, click a feature (Shift adds more), then pick a tool.'; }
+  function buildPanel() {
+    panel = el('div'); panel.id = 'lgxPanel';
+    const hd = el('div', 'hd', '<b>Edit tools</b><span style="opacity:.75;font-size:11px">Ctrl+Z undoes</span><button type="button" title="Close">×</button>'); panel.appendChild(hd);
+    hd.querySelector('button').onclick = () => togglePanel(false);
+    const sel = el('div'); sel.id = 'lgxSel'; panel.appendChild(sel);
+    GROUPS.forEach((g, gi) => {
+      const d = el('details'); d.open = gi <= 1; d.appendChild(el('summary', null, g[0] + ' <span style="font-weight:400;color:#5b6d79">(' + g[1].length + ')</span>')); const grid = el('div', 'lgx-grid');
+      g[1].forEach(t => { const b = el('button', 'lgx-b', '<i>' + t[1] + '</i><span>' + esc(t[0]) + '</span>'); b.type = 'button'; b.title = t[2]; if (t[4]) b.dataset.shape = t[0]; b.onclick = async () => { cancelInteract(); const was = SHAPES.active; SHAPES.stop(); if (t[4] && was === t[0]) return; try { await t[3](); } catch (e) { hint(null); T(t[0] + ': ' + (e && e.message ? e.message : e), 'err'); } finally { upd(); } }; grid.appendChild(b); });
+      d.appendChild(grid); panel.appendChild(d);
+    });
+    document.body.appendChild(panel);
+    let drag = null; hd.addEventListener('pointerdown', e => { if (e.target.tagName === 'BUTTON') return; const r = panel.getBoundingClientRect(); drag = { dx: e.clientX - r.left, dy: e.clientY - r.top }; hd.setPointerCapture(e.pointerId); });
+    hd.addEventListener('pointermove', e => { if (!drag) return; panel.style.left = Math.max(0, e.clientX - drag.dx) + 'px'; panel.style.top = Math.max(0, e.clientY - drag.dy) + 'px'; panel.style.right = 'auto'; });
+    hd.addEventListener('pointerup', () => { drag = null; });
+    upd();
+  }
+  function upd() { const s = document.getElementById('lgxSel'); if (s) s.innerHTML = selText(); }
+  const timer = setInterval(() => { if (panel && panel.isConnected) upd(); }, 900);
+  function togglePanel(on) { if (!panel) buildPanel(); panel.style.display = (on === undefined ? panel.style.display === 'none' : on) ? '' : 'none'; if (panel.style.display !== 'none') upd(); const b = Array.from(document.querySelectorAll('#loadedBtns .tool')).find(x => x.textContent.trim() === 'Edit tools'); if (b) b.classList.toggle('on', panel.style.display !== 'none'); }
+  LG.addTool({ name: 'Edit tools', icon: 'edit', title: 'Open the panel with 32 tools: shapes plus 29 editing tools: align, reshape, divide and construct', onClick() { togglePanel(); } });
+  if (!window.__LGX_BUILTIN) setTimeout(() => togglePanel(true), 50);
+})();
+
+</script>
 <script>
 (function(){
   var PASSWORD_B64 = "U3BnJGRrbUAzMjM3";
@@ -754,6 +1589,7 @@ html.unlocked #gate{display:none}
         <li><b>Select &amp; edit:</b> <b>Select</b> clicks a feature (Shift adds) or drags a box; <b>Move</b> drags features; <b>Vertices</b> lets you drag a feature’s dots, drag a pale middle dot to add a corner, and right-click a dot to delete it; <b>Attributes</b> jumps to the Attributes pane on the right, which edits one feature or all selected features at once (pick “All N features” in its list; fields showing ‹multiple values› differ, and only fields you change are updated); <b>Delete</b>, <b>Undo</b> (Ctrl+Z) and <b>Redo</b> (Ctrl+Y) work as you’d expect. In the attribute table, click a row to select it and double-click a cell to edit it. <b>Edit fields</b> adds, renames or removes attribute fields. Area, length and coordinates are filled in automatically.</li>
         <li><b>Rename a layer</b> with the Rename button on its card in Contents (or double-click its name). Hand-drawn layers are auto-saved in this browser and come back when you reopen the page; use <b>Download drawn</b> (all features, or just the selected ones) to keep a real file.</li>
         <li><b>Street View:</b> press <b>Street View</b> on the ribbon, then click a road on the map. The screen splits and Google Street View opens on the right, with a Google-style blue dot and view cone on the map showing where you are and which way you face. Drag that dot along the road to move Street View with it (it snaps to the nearest road), or click elsewhere to jump, drag the grey bar between the two halves to resize, and press ✕ to close. Paste a Google Maps API key (Maps JavaScript API) into the ribbon box for the full interactive view where the marker follows you as you move along the road; without a key a basic embedded view is used. The key is kept only in this browser.</li>
+        <li><b>Edit tools (built-in):</b> press <b>Edit tools</b> in the “Loaded tools” group to open the panel. <b>Create Shapes</b> draws circles, rectangles and triangles. <b>Alignment, Reshape, Divide</b> and <b>Construct</b> hold 29 ArcGIS-style editing tools. Select features with <b>Select</b> first; Ctrl+Z undoes an edit. Split, Clip, Merge, Buffer, Construct Polygons and polygon Offset load a geometry library from the internet the first time they are used.</li>
         <li><b>Import symbology from other programs:</b> open <b>Load tools</b> and press <b>Import symbology file…</b> (or drop the file on the map) to bring in a QGIS <b>.qml</b>, an <b>SLD</b>, an ArcGIS Pro <b>.lyrx</b>, an ArcGIS layer / web-map <b>.json</b> or a Mapbox / MapLibre style. You can also paste an ArcGIS layer address to read its colours from the server. Each layer carries one symbol here, so unique-value, graduated and rule-based renderers use their first class. Files with layer names are applied to matching layers; a QGIS .qml has no layer name, so it is applied to the layer selected in Contents.</li>
         <li><b>Load tools:</b> press <b>Load tools</b> and then <b>Load file…</b> to pick a file. A <b>symbology</b> file (.json) styles your layers by name or type (colors, widths, transparency, line style, point shape, labels) and is kept in the browser so you can apply it again later; use <b>Save current symbology</b> to make one from the styles you have set. A <b>tool</b> file (.js) adds its own buttons to a “Loaded tools” group on the toolbar. Download the sample files in that window to see the format. Only load tools from people you trust.</li>
         <li><b>Import file:</b> press <b>Import file</b> in the Import group (or drag files onto the map) to load a Shapefile (a .zip, or select the .shp + .dbf + .prj together), KML, KMZ, GeoJSON / Esri JSON, GPX, CSV/TSV with latitude/longitude columns or a WKT column, or a .wkt file. Several files can be picked at once. Projected shapefiles are converted to lat/lon using their .prj. Each import becomes an editable layer (separate layers for polygons, lines and points when a file mixes them), so you can edit it and download it again in any format. File Geodatabases (.gdb), GeoPackage, DWG/DXF are not supported – convert them to Shapefile or GeoJSON first.</li>
@@ -5380,6 +6216,34 @@ const GGCore = (function () {
         const r = window.__lgAddFeatures && window.__lgAddFeatures({ name: name || 'Tool layer', kind: 'GeoJSON', features: feats });
         if (!r) throw new Error('Nothing to add (no features with geometry).'); renderContents(); return r;
       },
+      picked: () => {
+        const l = pickedLayer(); if (!l) return null;
+        const items = Array.from(l.picked).map(k => { const f = featByKey(l, k); return f && f.geometry ? { key: String(k), feature: JSON.parse(JSON.stringify({ type: 'Feature', properties: f.properties || {}, geometry: f.geometry })) } : null; }).filter(Boolean);
+        return { layerId: l.id, name: l.name, kind: gkind(l), editable: !!l.manual, items };
+      },
+      pick: (layerId, keys, mode) => { const l = byId(layerId); if (l) pickFeatures(l, (keys || []).map(String), mode || 'replace'); },
+      clearPicks: () => clearPicks(),
+      edit: (layerId, ops) => {
+        const l = byId(layerId); if (!l || !l.manual) throw new Error('This layer is read-only. Use “Copy to editable” first.');
+        const want = { polygon: 'Polygon', line: 'LineString', point: 'Point' }[gkind(l)], out = { replaced: 0, added: [], deleted: 0 };
+        ops = ops || [];
+        ops.forEach(o => {
+          if (o.op === 'delete') return;
+          if (!o.geometry || o.geometry.type !== want) throw new Error('A ' + gkind(l) + ' layer can only hold ' + want + ' geometry (got ' + (o.geometry ? o.geometry.type : 'none') + ').');
+          if (o.op === 'replace' && !l.sel.get(String(o.key))) throw new Error('Feature ' + o.key + ' is not on this layer.');
+        });
+        pushUndo(l);
+        ops.forEach(o => {
+          if (o.op === 'delete') { const k = String(o.key); if (l.sel.delete(k)) { l.picked.delete(k); out.deleted++; } }
+          else if (o.op === 'replace') { const f = l.sel.get(String(o.key)); f.geometry = o.geometry; updateAuto(l, f); out.replaced++; }
+          else if (o.op === 'add') {
+            const f = newFeature(l, o.geometry);
+            Object.keys(o.properties || {}).forEach(k => { if (k in f.properties && k !== 'FID') f.properties[k] = o.properties[k]; });
+            out.added.push(String(f.id));
+          }
+        });
+        syncManual(l); return out;
+      },
       appendGeoJSON: (id, gj) => {
         const l = byId(id); if (!l || !l.manual) throw new Error('Layer ' + id + ' is not an editable layer.');
         const feats = !gj ? [] : gj.type === 'FeatureCollection' ? gj.features : gj.type === 'Feature' ? [gj] : [];
@@ -5794,6 +6658,13 @@ const GGCore = (function () {
     $('#btnLoad').addEventListener('click', () => { renderLoad(); modal.hidden = false; });
 
     /* tools you loaded earlier start again with the page */
+    /* built-in tools (shapes + 29 editing tools) start automatically; older separately loaded copies are dropped */
+    (function () {
+      const OLD = ['edit-tools.js', 'shape-tools.js'];
+      if (tools.some(t => OLD.indexOf(t.name) >= 0)) { tools.filter(t => OLD.indexOf(t.name) >= 0).forEach(t => stopTool(t.name)); tools = tools.filter(t => OLD.indexOf(t.name) < 0); lsSet(LS_TOOLS, tools); }
+      window.__LGX_BUILTIN = true;
+      document.querySelectorAll('script[type="text/lg-builtin-tool"]').forEach(sc => { const err = runTool({ name: sc.getAttribute('data-name') || 'Built-in tool', code: sc.textContent }); if (err) toast('A built-in tool could not start: ' + (err.message || err), 'err'); });
+    })();
     tools.forEach(t => { if (t.on !== false) { const err = runTool(t); if (err) toast('Tool “' + t.name + '” could not start: ' + (err.message || err), 'err'); } });
     renderLoad();
   })();
