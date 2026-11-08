@@ -510,7 +510,7 @@ html.unlocked #gate{display:none}
     </div><div class="grp-cap">Select area</div></div>
     <div class="grp"><div class="grp-btns">
       <button class="tool" id="btnImport" data-icon="up" title="Import Shapefile (.zip or .shp/.dbf/.prj), KML, KMZ, GeoJSON, GPX, CSV (lat/lon or WKT) and WKT files. You can also drag and drop files onto the map.">Import file</button>
-      <input type="file" id="impFile" multiple hidden accept=".zip,.kmz,.kml,.geojson,.json,.esrijson,.gpx,.csv,.tsv,.txt,.wkt,.shp,.dbf,.prj,.cpg,.shx">
+      <input type="file" id="impFile" multiple hidden accept=".qml,.sld,.xml,.lyrx,.lyr,.zip,.kmz,.kml,.geojson,.json,.esrijson,.gpx,.csv,.tsv,.txt,.wkt,.shp,.dbf,.prj,.cpg,.shx">
     </div><div class="grp-cap">Import</div></div>
     <div class="grp"><div class="grp-btns">
       <button class="tool" id="btnLoad" data-icon="plug" title="Load symbology files and your own tools (plugins), or any data file">Load tools</button>
@@ -674,7 +674,7 @@ html.unlocked #gate{display:none}
   <div class="modal" style="width:min(640px,100%)" role="dialog" aria-modal="true" aria-labelledby="ldTitleH">
     <div class="modal-head"><h2 id="ldTitleH">Load symbologies and tools</h2><button class="x" data-close aria-label="Close">×</button></div>
     <div class="modal-body" id="ldBody"></div>
-    <input type="file" id="ldFile" multiple hidden accept=".js,.json,.esrijson,.geojson,.zip,.kmz,.kml,.gpx,.csv,.tsv,.txt,.wkt,.shp,.dbf,.prj,.cpg,.shx">
+    <input type="file" id="ldFile" multiple hidden accept=".js,.json,.qml,.sld,.xml,.lyrx,.lyr,.esrijson,.geojson,.zip,.kmz,.kml,.gpx,.csv,.tsv,.txt,.wkt,.shp,.dbf,.prj,.cpg,.shx">
     <div class="modal-foot"><button class="btn" data-close>Close</button></div>
   </div>
 </div>
@@ -754,6 +754,7 @@ html.unlocked #gate{display:none}
         <li><b>Select &amp; edit:</b> <b>Select</b> clicks a feature (Shift adds) or drags a box; <b>Move</b> drags features; <b>Vertices</b> lets you drag a feature’s dots, drag a pale middle dot to add a corner, and right-click a dot to delete it; <b>Attributes</b> jumps to the Attributes pane on the right, which edits one feature or all selected features at once (pick “All N features” in its list; fields showing ‹multiple values› differ, and only fields you change are updated); <b>Delete</b>, <b>Undo</b> (Ctrl+Z) and <b>Redo</b> (Ctrl+Y) work as you’d expect. In the attribute table, click a row to select it and double-click a cell to edit it. <b>Edit fields</b> adds, renames or removes attribute fields. Area, length and coordinates are filled in automatically.</li>
         <li><b>Rename a layer</b> with the Rename button on its card in Contents (or double-click its name). Hand-drawn layers are auto-saved in this browser and come back when you reopen the page; use <b>Download drawn</b> (all features, or just the selected ones) to keep a real file.</li>
         <li><b>Street View:</b> press <b>Street View</b> on the ribbon, then click a road on the map. The screen splits and Google Street View opens on the right, with a Google-style blue dot and view cone on the map showing where you are and which way you face. Drag that dot along the road to move Street View with it (it snaps to the nearest road), or click elsewhere to jump, drag the grey bar between the two halves to resize, and press ✕ to close. Paste a Google Maps API key (Maps JavaScript API) into the ribbon box for the full interactive view where the marker follows you as you move along the road; without a key a basic embedded view is used. The key is kept only in this browser.</li>
+        <li><b>Import symbology from other programs:</b> open <b>Load tools</b> and press <b>Import symbology file…</b> (or drop the file on the map) to bring in a QGIS <b>.qml</b>, an <b>SLD</b>, an ArcGIS Pro <b>.lyrx</b>, an ArcGIS layer / web-map <b>.json</b> or a Mapbox / MapLibre style. You can also paste an ArcGIS layer address to read its colours from the server. Each layer carries one symbol here, so unique-value, graduated and rule-based renderers use their first class. Files with layer names are applied to matching layers; a QGIS .qml has no layer name, so it is applied to the layer selected in Contents.</li>
         <li><b>Load tools:</b> press <b>Load tools</b> and then <b>Load file…</b> to pick a file. A <b>symbology</b> file (.json) styles your layers by name or type (colors, widths, transparency, line style, point shape, labels) and is kept in the browser so you can apply it again later; use <b>Save current symbology</b> to make one from the styles you have set. A <b>tool</b> file (.js) adds its own buttons to a “Loaded tools” group on the toolbar. Download the sample files in that window to see the format. Only load tools from people you trust.</li>
         <li><b>Import file:</b> press <b>Import file</b> in the Import group (or drag files onto the map) to load a Shapefile (a .zip, or select the .shp + .dbf + .prj together), KML, KMZ, GeoJSON / Esri JSON, GPX, CSV/TSV with latitude/longitude columns or a WKT column, or a .wkt file. Several files can be picked at once. Projected shapefiles are converted to lat/lon using their .prj. Each import becomes an editable layer (separate layers for polygons, lines and points when a file mixes them), so you can edit it and download it again in any format. File Geodatabases (.gdb), GeoPackage, DWG/DXF are not supported – convert them to Shapefile or GeoJSON first.</li>
         <li><b>Download several layers at once:</b> open any Download dialog and tick more layers under “Also download these layers”. They are saved together in one .zip (all files together in a single folder, no sub-folders per layer). Hand-drawn and imported layers are saved in full; service layers use the area you choose, falling back to the current map view if nothing is traced or selected on them.</li>
@@ -5363,7 +5364,7 @@ const GGCore = (function () {
         { name: '*road*', kind: 'line', style: { line: '#ea580c', weight: 3, dash: 'dash', lineOp: 1 } },
         { kind: 'point', style: { shape: 'diamond', size: 12, fill: '#2563eb', line: '#ffffff', fillOp: 0.9, weight: 1.5 } }],
       default: { polygon: { line: '#334155', fill: '#94a3b8', fillOp: 0.3, weight: 1.5 } } };
-    const SAMPLE_TOOL = '/* Example tool for Layer Grabber. Load it with Load tools > Load file.\n   Your code receives one object, LG. Add as many buttons as you like with LG.addTool(). */\nLG.addTool({\n  name: \'Count features\',\n  title: \'Show how many features the selected layer has\',\n  icon: \'table\',                        // any built-in icon name, or your own <svg>…</svg> text\n  onClick(LG) {\n    const l = LG.activeLayer();\n    if (!l) return LG.toast(\'Click a layer in the Contents list first.\', \'warn\');\n    LG.toast(l.name + \': \' + LG.features(l.id).length + \' features loaded\');\n  }\n});\n\n/* Other things LG can do:\n   LG.layers()  LG.activeLayer()  LG.features(id)  LG.setStyle(id, {line, fill, weight, fillOp, lineOp, dash, shape, size})\n   LG.addGeoJSON(geojson, \'Layer name\')  LG.applySymbology(symbologyObject)  LG.zoomTo(id)\n   LG.map (the Leaflet map)  LG.toast(msg)  LG.download(blob, filename) */\n';
+    const SAMPLE_TOOL = '/* Example tool for Layer Grabber. Load it with Load tools > Load file.\n   Your code receives one object, LG. Add as many buttons as you like with LG.addTool(). */\nLG.addTool({\n  name: \'Count features\',\n  title: \'Show how many features the selected layer has\',\n  icon: \'table\',                        // any built-in icon name, or your own <svg>…</svg> text\n  onClick(LG) {\n    const l = LG.activeLayer();\n    if (!l) return LG.toast(\'Click a layer in the Contents list first.\', \'warn\');\n    LG.toast(l.name + \': \' + LG.features(l.id).length + \' features loaded\');\n  }\n});\n\n/* Other things LG can do:\n   LG.layers()  LG.activeLayer()  LG.features(id)  LG.setStyle(id, {line, fill, weight, fillOp, lineOp, dash, shape, size})\n   LG.addGeoJSON(geojson, \'Layer name\')  LG.appendGeoJSON(layerId, geojson)  LG.applySymbology(symbologyObject)  LG.zoomTo(id)\n   LG.map (the Leaflet map)  LG.toast(msg)  LG.download(blob, filename) */\n';
 
     /* ----- tools (plugins) ----- */
     const info = l => ({ id: l.id, name: l.name, kind: gkind(l), visible: !!l.visible, editable: !!l.manual, style: Object.assign({}, l.style), fields: (l.fields || []).map(f => f.name) });
@@ -5378,6 +5379,13 @@ const GGCore = (function () {
         const feats = !gj ? [] : gj.type === 'FeatureCollection' ? gj.features : gj.type === 'Feature' ? [gj] : gj.coordinates || gj.geometries ? [{ type: 'Feature', geometry: gj, properties: {} }] : [];
         const r = window.__lgAddFeatures && window.__lgAddFeatures({ name: name || 'Tool layer', kind: 'GeoJSON', features: feats });
         if (!r) throw new Error('Nothing to add (no features with geometry).'); renderContents(); return r;
+      },
+      appendGeoJSON: (id, gj) => {
+        const l = byId(id); if (!l || !l.manual) throw new Error('Layer ' + id + ' is not an editable layer.');
+        const feats = !gj ? [] : gj.type === 'FeatureCollection' ? gj.features : gj.type === 'Feature' ? [gj] : [];
+        const want = gkind(l) === 'polygon' ? 'Polygon' : gkind(l) === 'line' ? 'LineString' : 'Point'; let n = 0;
+        feats.forEach(ft => { const g = ft && ft.geometry; if (!g || g.type !== want) return; const f = newFeature(l, g); Object.keys(ft.properties || {}).forEach(k => { if (k in f.properties && k !== 'FID') f.properties[k] = ft.properties[k]; }); n++; });
+        if (n) { syncManual(l); renderContents(); } return n;
       },
       addSymbology: o => { const s = addSymbology(o, 'Tool symbology'); return s.id; },
       applySymbology: (o, layerId) => { const set = isSym(o) ? { layers: o.layers, default: o.default } : o; return applySet(set, layerId == null ? layers : layers.filter(l => l.id === Number(layerId))); }
@@ -5409,6 +5417,311 @@ const GGCore = (function () {
       toast('Tool “' + f.name + '” loaded. Its button is in the “Loaded tools” group on the toolbar.');
     }
 
+    /* ----- import symbology from other programs (QGIS .qml, SLD, ArcGIS .lyrx / REST JSON, Mapbox style) ----- */
+    const SYMFMT = (function () {
+      const MM = 3.7795, PT = 4 / 3;
+      const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+      const hx = n => Math.round(clamp(n, 0, 255)).toString(16).padStart(2, '0');
+      const rgbHex = (r, g, b) => '#' + hx(r) + hx(g) + hx(b);
+      const num = (v, d) => { const n = parseFloat(v); return isFinite(n) ? n : d; };
+      const kids = el => Array.from(el ? el.children : []);
+      const kid = (el, nm) => kids(el).find(c => c.localName === nm) || null;
+      function dashFromArr(a, w) {
+        a = (a || []).map(Number).filter(isFinite); if (a.length < 2) return 'solid';
+        w = Math.max(w || 1, 1); if (a.length >= 4) return 'dashdot';
+        const on = a[0] / w; return on <= 1.5 ? 'dot' : on <= 5 ? 'dash' : 'longdash';
+      }
+      const mk = (name, kind, style, labels) => { const r = { style }; if (name) r.name = name; if (kind) r.kind = kind; if (labels) r.labels = labels; return r; };
+      const pack = (name, rules, note) => {
+        const def = {}; rules.forEach(r => { if (r.kind && !def[r.kind]) def[r.kind] = r.style; });
+        return { type: 'layergrabber-symbology', version: 1, name, note: note || '', layers: rules, default: Object.keys(def).length ? def : null };
+      };
+      const fieldFrom = ex => { const m = String(ex || '').match(/\$feature\.([A-Za-z_]\w*)|\$feature\[["']([^"']+)["']\]|\[([^\]]+)\]|\{([^}]+)\}|^"?([A-Za-z_]\w*)"?$/); return m ? (m[1] || m[2] || m[3] || m[4] || m[5]) : null; };
+
+      /* ---------- QGIS .qml ---------- */
+      const qColor = s => { if (!s) return null; const p = String(s).split(',').slice(0, 4).map(Number); if (p.length < 3 || p.some(x => !isFinite(x))) return null; return { hex: rgbHex(p[0], p[1], p[2]), a: p.length > 3 ? p[3] / 255 : 1 }; };
+      const qUnit = u => /point/i.test(u || '') ? PT : /pixel/i.test(u || '') ? 1 : /mapunit|meter/i.test(u || '') ? 1 : MM;
+      const qDash = s => ({ solid: 'solid', dash: 'dash', dot: 'dot', 'dash dot': 'dashdot', 'dash dot dot': 'dashdot' })[String(s || 'solid').toLowerCase()] || 'solid';
+      const QSHAPE = { circle: 'circle', square: 'square', rectangle: 'square', diamond: 'diamond', triangle: 'triangle', equilateral_triangle: 'triangle', star: 'star', regular_star: 'star', cross: 'cross', cross_fill: 'cross', cross2: 'x', x: 'x', arrow: 'triangle' };
+      function qProps(el) {
+        const p = {};
+        kids(el).forEach(c => {
+          if (c.localName === 'prop') p[c.getAttribute('k')] = c.getAttribute('v');
+          else if (c.localName === 'Option') kids(c).forEach(o => { if (o.localName === 'Option' && o.getAttribute('name')) p[o.getAttribute('name')] = o.getAttribute('value'); });
+        });
+        return p;
+      }
+      function qSymbol(sym, layerOp) {
+        const type = sym.getAttribute('type'), alpha = num(sym.getAttribute('alpha'), 1) * layerOp;
+        const le = kids(sym).filter(c => c.localName === 'layer' && c.getAttribute('enabled') !== '0')[0]; if (!le) return null;
+        const p = qProps(le), st = {};
+        if (type === 'fill') {
+          const fc = qColor(p.color), oc = qColor(p.outline_color || p.line_color);
+          if (fc) { st.fill = fc.hex; st.fillOp = fc.a * alpha; } if (p.style === 'no') st.fillOp = 0;
+          if (oc) { st.line = oc.hex; st.lineOp = oc.a * alpha; } else st.lineOp = alpha;
+          st.weight = clamp(num(p.outline_width, 0.26) * qUnit(p.outline_width_unit), 0, 12); st.dash = qDash(p.outline_style);
+          if (p.outline_style === 'no') st.lineOp = 0;
+          return { kind: 'polygon', style: st };
+        }
+        if (type === 'line') {
+          const lc = qColor(p.line_color || p.color); if (lc) { st.line = lc.hex; st.lineOp = lc.a * alpha; }
+          st.weight = clamp(num(p.line_width || p.width, 0.26) * qUnit(p.line_width_unit || p.width_unit), 0, 12); st.dash = qDash(p.line_style || p.penstyle);
+          return { kind: 'line', style: st };
+        }
+        if (type === 'marker') {
+          const fc = qColor(p.color), oc = qColor(p.outline_color);
+          if (fc) { st.fill = fc.hex; st.fillOp = fc.a * alpha; } if (oc) { st.line = oc.hex; st.lineOp = oc.a * alpha; }
+          st.size = clamp(num(p.size, 2) * qUnit(p.size_unit), 2, 60); st.weight = clamp(num(p.outline_width, 0.2) * qUnit(p.outline_width_unit), 0, 12);
+          st.shape = QSHAPE[String(p.name || 'circle').toLowerCase()] || 'circle';
+          return { kind: 'point', style: st };
+        }
+        return null;
+      }
+      function fromQml(doc, name) {
+        const r = doc.getElementsByTagName('renderer-v2')[0]; if (!r) throw new Error('This QGIS style has no renderer (renderer-v2).');
+        const lop = num((doc.getElementsByTagName('layerOpacity')[0] || {}).textContent, 1);
+        const symsEl = kid(r, 'symbols'), syms = kids(symsEl).filter(c => c.localName === 'symbol');
+        const rt = r.getAttribute('type'); let sym = syms[0], note = '';
+        if (rt === 'singleSymbol') { const ss = kid(r, 'source-symbol'); sym = syms[0] || (ss && kid(ss, 'symbol')); }
+        else {
+          const cats = kids(kid(r, 'categories') || kid(r, 'ranges') || kid(r, 'rules')).length || syms.length;
+          note = (rt === 'categorizedSymbol' ? 'Categorized' : rt === 'graduatedSymbol' ? 'Graduated' : rt === 'RuleRenderer' ? 'Rule-based' : rt) + ' renderer with ' + cats + ' classes (by ' + (r.getAttribute('attr') || 'rules') + '): the first class symbol was used for the whole layer.';
+        }
+        if (!sym) throw new Error('No symbol found in this QGIS style.');
+        const res = qSymbol(sym, lop); if (!res) throw new Error('This QGIS symbol type is not supported (only simple fill, line and marker).');
+        let labels = null; const lab = doc.getElementsByTagName('labeling')[0], ts = doc.getElementsByTagName('text-style')[0];
+        if (lab && ts && lab.getAttribute('type') !== 'none') {
+          const f = fieldFrom(ts.getAttribute('fieldName')), tc = qColor(ts.getAttribute('textColor'));
+          if (f) labels = { fields: [f], style: { size: num(ts.getAttribute('fontSize'), 10), color: tc ? tc.hex : '#111111', bold: num(ts.getAttribute('fontWeight'), 50) >= 63 || /bold/i.test(ts.getAttribute('namedStyle') || ''), italic: ts.getAttribute('fontItalic') === '1', font: (ts.getAttribute('fontFamily') || '').replace(/[^\w .-]/g, '').slice(0, 40) || undefined } };
+        }
+        return { obj: pack(name, [mk(null, res.kind, res.style, labels)], note), nameless: true, note };
+      }
+
+      /* ---------- SLD ---------- */
+      function fromSld(doc, name) {
+        const T = (el, n) => Array.from(el.getElementsByTagNameNS('*', n));
+        const ch = (el, n) => kids(el).find(c => c.localName === n) || null;
+        const param = (el, n) => { const e = T(el, 'CssParameter').concat(T(el, 'SvgParameter')).find(x => x.getAttribute('name') === n); return e ? e.textContent.trim() : null; };
+        const fillOf = (f, st) => { st.fill = f ? (param(f, 'fill') || '#808080') : '#808080'; st.fillOp = f ? num(param(f, 'fill-opacity'), 1) : 0; };
+        const strokeOf = (s, st) => {
+          if (!s) { st.lineOp = 0; st.weight = 0; return; }
+          st.line = param(s, 'stroke') || '#000000'; st.weight = clamp(num(param(s, 'stroke-width'), 1), 0, 12); st.lineOp = num(param(s, 'stroke-opacity'), 1);
+          const da = param(s, 'stroke-dasharray'); st.dash = da ? dashFromArr(da.split(/[\s,]+/), st.weight) : 'solid';
+        };
+        const SH = { circle: 'circle', square: 'square', triangle: 'triangle', star: 'star', cross: 'cross', x: 'x' };
+        function symb(rule) {
+          const out = {}, ps = ch(rule, 'PolygonSymbolizer'), ls = ch(rule, 'LineSymbolizer'), pt = ch(rule, 'PointSymbolizer'), tx = ch(rule, 'TextSymbolizer');
+          if (ps) { const st = {}; fillOf(ch(ps, 'Fill'), st); strokeOf(ch(ps, 'Stroke'), st); out.main = { kind: 'polygon', style: st }; }
+          else if (ls) { const st = {}; strokeOf(ch(ls, 'Stroke'), st); if (st.line) st.fill = st.line; out.main = { kind: 'line', style: st }; }
+          else if (pt) {
+            const g = T(pt, 'Graphic')[0], mark = g && T(g, 'Mark')[0], st = {}; st.size = clamp(num(g && (T(g, 'Size')[0] || {}).textContent, 8), 2, 60);
+            const wk = mark && T(mark, 'WellKnownName')[0]; st.shape = SH[String(wk ? wk.textContent : 'circle').trim().toLowerCase()] || 'circle';
+            fillOf(mark && ch(mark, 'Fill'), st); if (mark && !ch(mark, 'Fill')) { st.fill = '#808080'; st.fillOp = 1; } strokeOf(mark && ch(mark, 'Stroke'), st); out.main = { kind: 'point', style: st };
+          }
+          if (tx) {
+            const lb = ch(tx, 'Label'), pn = lb && T(lb, 'PropertyName')[0], f = pn ? pn.textContent.trim() : null, fo = ch(tx, 'Font'), fi = ch(tx, 'Fill');
+            if (f) out.label = { fields: [f], style: { size: clamp(num(fo && param(fo, 'font-size'), 12), 5, 60), bold: !!(fo && /bold/i.test(param(fo, 'font-weight') || '')), italic: !!(fo && /italic/i.test(param(fo, 'font-style') || '')), color: fi ? (param(fi, 'fill') || '#111111') : '#111111', font: ((fo && param(fo, 'font-family')) || '').replace(/[^\w .-]/g, '').slice(0, 40) || undefined } };
+          }
+          return out;
+        }
+        let holders = T(doc, 'NamedLayer').concat(T(doc, 'UserLayer')); if (!holders.length) holders = [doc.documentElement];
+        const rules = [];
+        holders.forEach(h => {
+          const nm = ch(h, 'Name'), lname = nm ? nm.textContent.trim().replace(/^.*:/, '') : '';
+          const rs = T(h, 'Rule').map(symb).filter(x => x.main || x.label); if (!rs.length) return;
+          const main = rs.find(x => x.main), lab = rs.find(x => x.label);
+          if (main) rules.push(mk(lname ? '*' + lname + '*' : null, main.kind || main.main.kind, main.main.style, lab && lab.label));
+        });
+        if (!rules.length) throw new Error('No polygon, line or point symbolizer found in this SLD.');
+        return { obj: pack(name, rules, 'Imported from SLD. For layers with several rules the first rule with a symbol is used.'), nameless: !rules.some(r => r.name) };
+      }
+
+      /* ---------- ArcGIS REST JSON ---------- */
+      const eCol = c => Array.isArray(c) && c.length >= 3 ? { hex: rgbHex(c[0], c[1], c[2]), a: c.length > 3 ? c[3] / 255 : 1 } : null;
+      const EDASH = { esriSLSSolid: 'solid', esriSLSDash: 'dash', esriSLSShortDash: 'dash', esriSLSLongDash: 'longdash', esriSLSDot: 'dot', esriSLSShortDot: 'dot', esriSLSDashDot: 'dashdot', esriSLSDashDotDot: 'dashdot', esriSLSShortDashDot: 'dashdot', esriSLSLongDashDot: 'dashdot' };
+      const ESH = { esriSMSCircle: 'circle', esriSMSSquare: 'square', esriSMSDiamond: 'diamond', esriSMSCross: 'cross', esriSMSX: 'x', esriSMSTriangle: 'triangle' };
+      function eOutline(o, st) {
+        const oc = o && eCol(o.color);
+        if (!o || !oc || o.style === 'esriSLSNull') { st.lineOp = 0; st.weight = 0; return; }
+        st.line = oc.hex; st.lineOp = oc.a; st.weight = clamp((o.width == null ? 1 : o.width) * PT, 0, 12); st.dash = EDASH[o.style] || 'solid';
+      }
+      function esriSymbol(s) {
+        if (!s) return null; const st = {};
+        if (s.type === 'esriSFS') { const c = eCol(s.color); st.fill = c ? c.hex : '#808080'; st.fillOp = !c || s.style === 'esriSFSNull' ? 0 : (/esriSFSSolid/.test(s.style || 'esriSFSSolid') ? c.a : c.a * 0.5); eOutline(s.outline, st); return { kind: 'polygon', style: st }; }
+        if (s.type === 'esriSLS') { const c = eCol(s.color); if (c) { st.line = c.hex; st.fill = c.hex; st.lineOp = s.style === 'esriSLSNull' ? 0 : c.a; } st.weight = clamp((s.width == null ? 1 : s.width) * PT, 0, 12); st.dash = EDASH[s.style] || 'solid'; return { kind: 'line', style: st }; }
+        if (s.type === 'esriSMS' || s.type === 'esriPMS') {
+          const c = eCol(s.color); st.fill = c ? c.hex : '#3b82f6'; st.fillOp = c ? c.a : 1; st.size = clamp((s.size || s.width || 9) * PT, 2, 60); st.shape = ESH[s.style] || 'circle'; eOutline(s.outline, st); return { kind: 'point', style: st };
+        }
+        return null;
+      }
+      function esriLayer(j, di) {
+        const r = di.renderer; if (!r) return null; let sym = null, note = '';
+        if (r.type === 'simple') sym = r.symbol;
+        else if (r.type === 'uniqueValue') { sym = (r.uniqueValueInfos && r.uniqueValueInfos[0] && r.uniqueValueInfos[0].symbol) || r.defaultSymbol; note = 'Unique-value renderer (' + ((r.uniqueValueInfos || []).length) + ' classes): first class used.'; }
+        else if (r.type === 'classBreaks') { sym = (r.classBreakInfos && r.classBreakInfos[0] && r.classBreakInfos[0].symbol) || r.defaultSymbol; note = 'Class-breaks renderer (' + ((r.classBreakInfos || []).length) + ' classes): first class used.'; }
+        else sym = r.symbol || r.defaultSymbol;
+        const res = esriSymbol(sym); if (!res) return null;
+        if (isFinite(di.transparency) && di.transparency > 0) { const k = 1 - di.transparency / 100; if (res.style.fillOp != null) res.style.fillOp *= k; if (res.style.lineOp != null) res.style.lineOp *= k; }
+        let labels = null; const li = (di.labelingInfo || [])[0];
+        if (li) {
+          const f = fieldFrom((li.labelExpressionInfo && li.labelExpressionInfo.expression) || li.labelExpression), ts = li.symbol || {}, c = eCol(ts.color), fo = ts.font || {};
+          if (f) labels = { fields: [f], style: { size: clamp((fo.size || 10) * 1, 5, 60), color: c ? c.hex : '#111111', bold: /bold/i.test(fo.weight || ''), italic: /italic/i.test(fo.style || ''), font: String(fo.family || '').replace(/[^\w .-]/g, '').slice(0, 40) || undefined } };
+        }
+        return { rule: mk(j.name || j.title || null, res.kind, res.style, labels), note };
+      }
+      function fromEsri(o, name) {
+        const items = [];
+        if (Array.isArray(o)) o.forEach(x => items.push(x));
+        else if (Array.isArray(o.operationalLayers)) o.operationalLayers.forEach(l => { const ld = l.layerDefinition || {}; items.push({ name: l.title, drawingInfo: ld.drawingInfo }); });
+        else if (Array.isArray(o.layers) && o.layers.some(l => l.drawingInfo)) o.layers.forEach(x => items.push(x));
+        else items.push(o);
+        const rules = [], notes = [];
+        items.forEach(j => { const di = j.drawingInfo || (j.renderer ? j : null); if (!di) return; const r = esriLayer(j, di); if (r) { rules.push(r.rule); if (r.note) notes.push(r.note); } });
+        if (!rules.length) throw new Error('No simple, unique-value or class-breaks symbol found in this ArcGIS JSON.');
+        return { obj: pack(name, rules, notes.join(' ')), nameless: !rules.some(r => r.name), note: notes[0] };
+      }
+
+      /* ---------- ArcGIS Pro .lyrx (CIM) ---------- */
+      function cimColor(c) {
+        if (!c || !Array.isArray(c.values)) return null; const v = c.values, a = x => (x == null ? 100 : x) / 100;
+        if (c.type === 'CIMRGBColor') return { hex: rgbHex(v[0], v[1], v[2]), a: a(v[3]) };
+        if (c.type === 'CIMGrayColor') { const g = v[0] / 100 * 255; return { hex: rgbHex(g, g, g), a: a(v[1]) }; }
+        if (c.type === 'CIMCMYKColor') { const k = 1 - v[3] / 100; return { hex: rgbHex(255 * (1 - v[0] / 100) * k, 255 * (1 - v[1] / 100) * k, 255 * (1 - v[2] / 100) * k), a: a(v[4]) }; }
+        if (c.type === 'CIMHSVColor') {
+          const h = (v[0] % 360) / 60, s = v[1] / 100, b = v[2] / 100, i = Math.floor(h), f = h - i, p = b * (1 - s), q = b * (1 - s * f), t = b * (1 - s * (1 - f));
+          const m = [[b, t, p], [q, b, p], [p, b, t], [p, q, b], [t, p, b], [b, p, q]][i % 6]; return { hex: rgbHex(m[0] * 255, m[1] * 255, m[2] * 255), a: a(v[3]) };
+        }
+        return null;
+      }
+      const cimSym = s => s && s.type === 'CIMSymbolReference' ? s.symbol : s;
+      const layersOf = s => (s && s.symbolLayers || []).filter(l => l && l.enable !== false);
+      function cimStroke(l, st) {
+        const c = cimColor(l.color); if (c) { st.line = c.hex; st.lineOp = c.a; } st.weight = clamp((l.width == null ? 1 : l.width) * PT, 0, 12);
+        const d = (l.effects || []).find(e => e.type === 'CIMGeometricEffectDashes'); st.dash = d ? dashFromArr(d.dashTemplate, l.width) : 'solid';
+      }
+      function cimMarkerShape(g) {
+        if (!g) return 'circle'; if (g.curveRings || /"a"\s*:|"c"\s*:/.test(JSON.stringify(g))) return 'circle';
+        const ring = (g.rings || [])[0]; if (!ring) return 'circle'; const n = ring.length - 1;
+        if (n === 3) return 'triangle'; if (n === 10) return 'star';
+        if (n === 4) { const xs = new Set(ring.map(p => Math.round(p[0] * 100))); return xs.size <= 3 ? 'square' : 'diamond'; }
+        return 'circle';
+      }
+      function cimSymbol(raw) {
+        const s = cimSym(raw); if (!s) return null; const st = {}, ls = layersOf(s);
+        if (s.type === 'CIMPolygonSymbol') {
+          const fill = ls.find(l => l.type === 'CIMSolidFill'), hatch = ls.find(l => l.type === 'CIMHatchFill'), stroke = ls.find(l => l.type === 'CIMSolidStroke');
+          if (fill) { const c = cimColor(fill.color); st.fill = c ? c.hex : '#808080'; st.fillOp = c ? c.a : 1; }
+          else if (hatch) { const hl = layersOf(hatch.lineSymbol).find(l => l.type === 'CIMSolidStroke'), c = hl && cimColor(hl.color); st.fill = c ? c.hex : '#808080'; st.fillOp = 0.4; }
+          else { st.fill = '#808080'; st.fillOp = 0; }
+          if (stroke) cimStroke(stroke, st); else { st.lineOp = 0; st.weight = 0; } return { kind: 'polygon', style: st };
+        }
+        if (s.type === 'CIMLineSymbol') { const stroke = ls.find(l => l.type === 'CIMSolidStroke'); if (!stroke) return null; cimStroke(stroke, st); st.fill = st.line; return { kind: 'line', style: st }; }
+        if (s.type === 'CIMPointSymbol') {
+          const vm = ls.find(l => l.type === 'CIMVectorMarker'); st.size = clamp((s.size || (vm && vm.size) || 8) * PT, 2, 60);
+          if (vm) {
+            const mg = (vm.markerGraphics || [])[0], gs = mg && cimSym(mg.symbol), gl = layersOf(gs), f = gl.find(l => l.type === 'CIMSolidFill'), so = gl.find(l => l.type === 'CIMSolidStroke');
+            st.shape = cimMarkerShape(mg && mg.geometry); const fc = f && cimColor(f.color); st.fill = fc ? fc.hex : '#3b82f6'; st.fillOp = fc ? fc.a : (so && !f ? 0 : 1);
+            if (so) cimStroke(so, st); else { st.lineOp = 0; st.weight = 0; }
+          } else { st.shape = 'circle'; st.fill = '#3b82f6'; st.fillOp = 1; }
+          return { kind: 'point', style: st };
+        }
+        return null;
+      }
+      function fromLyrx(o, name) {
+        const defs = o.layerDefinitions || (o.renderer ? [o] : []), rules = [], notes = [];
+        defs.forEach(d => {
+          const r = d.renderer; if (!r) return; let sym = null;
+          if (r.type === 'CIMSimpleRenderer') sym = r.symbol;
+          else if (r.type === 'CIMUniqueValueRenderer') { const c = r.groups && r.groups[0] && r.groups[0].classes && r.groups[0].classes[0]; sym = (c && c.symbol) || r.defaultSymbol; notes.push('Unique-value renderer: first class used for “' + (d.name || 'layer') + '”.'); }
+          else if (r.type === 'CIMClassBreaksRenderer') { sym = (r.breaks && r.breaks[0] && r.breaks[0].symbol) || r.defaultSymbol; notes.push('Class-breaks renderer: first class used for “' + (d.name || 'layer') + '”.'); }
+          else sym = r.symbol || r.defaultSymbol;
+          const res = cimSymbol(sym); if (!res) return;
+          if (isFinite(d.transparency) && d.transparency > 0) { const k = 1 - d.transparency / 100; if (res.style.fillOp != null) res.style.fillOp *= k; if (res.style.lineOp != null) res.style.lineOp *= k; }
+          let labels = null; const lc = d.labelVisibility === false ? null : (d.labelClasses || [])[0];
+          if (lc) {
+            const f = fieldFrom(lc.expression), ts = cimSym(lc.textSymbol) || {}, tl = layersOf(ts.symbol || ts).find(l => l.type === 'CIMSolidFill'), c = tl && cimColor(tl.color);
+            if (f) labels = { fields: [f], style: { size: clamp(ts.height || 10, 5, 60), color: c ? c.hex : '#111111', bold: /bold/i.test(ts.fontStyleName || ''), italic: /italic/i.test(ts.fontStyleName || ''), font: String(ts.fontFamilyName || '').replace(/[^\w .-]/g, '').slice(0, 40) || undefined } };
+          }
+          rules.push(mk(d.name || null, res.kind, res.style, labels));
+        });
+        if (!rules.length) throw new Error('No supported renderer found in this .lyrx file.');
+        return { obj: pack(name, rules, notes.join(' ')), nameless: !rules.some(r => r.name), note: notes[0] };
+      }
+
+      /* ---------- Mapbox / MapLibre style ---------- */
+      function fromMapbox(o, name) {
+        const val = v => { if (Array.isArray(v)) { if (v[0] === 'literal') return v[1]; return val(v[v.length - 1]); } if (v && typeof v === 'object' && Array.isArray(v.stops) && v.stops.length) return val(v.stops[v.stops.length - 1][1]); return v; };
+        const col = v => { v = val(v); return typeof v === 'string' ? v : null; };
+        const n = (v, d) => { v = val(v); return typeof v === 'number' && isFinite(v) ? v : d; };
+        const rules = [], seen = {}, labelBy = {};
+        (o.layers || []).forEach(l => {
+          const nm = l['source-layer'] || l.id, pt = l.paint || {}, ly = l.layout || {}, key = nm + '|' + l.type; if (!nm) return;
+          if (l.type === 'symbol' && ly['text-field']) {
+            let tf = val(ly['text-field']); if (Array.isArray(tf)) tf = JSON.stringify(tf); const f = fieldFrom(String(tf).replace(/\["get","?([^"\]]+)"?\]/, '{$1}'));
+            if (f && !labelBy[nm]) labelBy[nm] = { fields: [f], style: { size: clamp(n(ly['text-size'], 12), 5, 60), color: col(pt['text-color']) || '#111111', bold: /bold/i.test(String(val(ly['text-font']) || '')) } };
+            return;
+          }
+          if (seen[key]) return; let st = null, kind;
+          if (l.type === 'fill') { kind = 'polygon'; st = { fill: col(pt['fill-color']) || '#000000', fillOp: n(pt['fill-opacity'], 1) }; const oc = col(pt['fill-outline-color']); if (oc) { st.line = oc; st.weight = 1; st.lineOp = 1; } }
+          else if (l.type === 'line') { kind = 'line'; st = { line: col(pt['line-color']) || '#000000', weight: clamp(n(pt['line-width'], 1), 0, 12), lineOp: n(pt['line-opacity'], 1) }; st.fill = st.line; const da = val(pt['line-dasharray']); st.dash = Array.isArray(da) ? dashFromArr(da, 1) : 'solid'; }
+          else if (l.type === 'circle') { kind = 'point'; st = { fill: col(pt['circle-color']) || '#000000', fillOp: n(pt['circle-opacity'], 1), size: clamp(n(pt['circle-radius'], 5) * 2, 2, 60), shape: 'circle', line: col(pt['circle-stroke-color']) || '#ffffff', weight: clamp(n(pt['circle-stroke-width'], 0), 0, 12) }; if (!st.weight) st.lineOp = 0; }
+          else return;
+          seen[key] = true; rules.push(mk('*' + nm + '*', kind, st, null));
+        });
+        (o.layers || []).forEach(l => {          // line layer drawn over a fill layer of the same source: use it as the polygon outline
+          if (l.type !== 'line') return; const nm = l['source-layer'] || l.id, poly = rules.find(r => r.name === '*' + nm + '*' && r.kind === 'polygon');
+          if (poly && poly.style.line == null) { const pt = l.paint || {}; poly.style.line = col(pt['line-color']) || '#000000'; poly.style.weight = clamp(n(pt['line-width'], 1), 0, 12); poly.style.lineOp = n(pt['line-opacity'], 1); }
+        });
+        rules.forEach(r => { const lb = labelBy[r.name.slice(1, -1)]; if (lb) r.labels = lb; });
+        if (!rules.length) throw new Error('No fill, line or circle layers found in this style.');
+        return { obj: pack(name, rules, 'Imported from a Mapbox/MapLibre style. Data-driven expressions use their last value.'), nameless: false };
+      }
+
+      /* ---------- detect + convert ---------- */
+      async function convert(file) {
+        const n = file.name || 'Symbology', base = n.replace(/\.[^.]+$/, ''), txt = await file.text();
+        if (/\.lyr$/i.test(n) && !/^\s*[<{]/.test(txt)) throw new Error('.lyr is a closed binary ArcGIS format. In ArcGIS Pro use “Save As Layer File” to make a .lyrx, or export the style as .qml / .sld.');
+        if (/^\s*</.test(txt)) {
+          const doc = new DOMParser().parseFromString(txt, 'application/xml'); if (doc.getElementsByTagName('parsererror').length) throw new Error('The XML file could not be read.');
+          const root = doc.documentElement.localName;
+          if (root === 'qgis') return fromQml(doc, base); if (root === 'StyledLayerDescriptor' || root === 'UserStyle' || root === 'NamedLayer') return fromSld(doc, base);
+          return null;
+        }
+        let o; try { o = JSON.parse(txt); } catch (e) { return null; }
+        if (!o || typeof o !== 'object') return null;
+        if (o.type === 'CIMLayerDocument' || Array.isArray(o.layerDefinitions)) return fromLyrx(o, base);
+        if (!Array.isArray(o.features) && (o.drawingInfo || (o.renderer && o.renderer.type) || Array.isArray(o.operationalLayers) || (Array.isArray(o.layers) && o.layers.some(l => l && l.drawingInfo)))) return fromEsri(o, base);
+        if (Array.isArray(o) && o.some(l => l && l.drawingInfo)) return fromEsri(o, base);
+        if (!Array.isArray(o.features) && Array.isArray(o.layers) && o.layers.some(l => l && l.type && (l.paint || l.layout || l.source || l['source-layer']))) return fromMapbox(o, base);
+        return null;
+      }
+      return { convert, fromEsri };
+    })();
+
+    function finishImport(res, fileName, forced) {
+      const set = addSymbology(res.obj, fileName);
+      let targets = layers;
+      if (res.nameless) { const a = layers.find(l => l.id === activeId); targets = a ? [a] : []; }
+      const n = applySet(set, targets);
+      toast('Symbology “' + set.name + '” imported' + (n ? ' and applied to ' + n + ' layer' + (n === 1 ? '' : 's') + '.' : (res.nameless ? '. Select a layer in Contents, then press “Apply to selected layer” in the Load window.' : '. No layer name matched yet – use Apply in the Load window.')) + (res.note ? ' ' + res.note : ''), n ? '' : 'warn');
+    }
+    async function importFromUrl(raw) {
+      let u = String(raw || '').trim(); if (!u) { toast('Paste the address of an ArcGIS layer (…/FeatureServer/0 or …/MapServer/3).', 'warn'); return; }
+      u = u.replace(/[?#].*$/, '').replace(/\/+$/, ''); busy(1);
+      try { const j = await arcRequest(u, { f: 'json' }); finishImport(SYMFMT.fromEsri(j, j.name || 'ArcGIS layer'), j.name || 'ArcGIS layer'); }
+      catch (e) { toast('Could not read the symbology: ' + (e.message || e), 'err'); } finally { busy(-1); }
+    }
+    async function importFromServiceLayers() {
+      const svc = layers.filter(l => !l.manual && l.url); if (!svc.length) { toast('No service layers are loaded.', 'warn'); return; }
+      busy(1); let ok = 0;
+      try {
+        for (const l of svc) {
+          try { const j = await arcRequest(l.url, { f: 'json' }), res = SYMFMT.fromEsri(Object.assign({}, j, { name: l.name }), l.name); applySet({ layers: res.obj.layers, default: null }, [l]); ok++; } catch (e) { /* layer has no readable renderer */ }
+        }
+      } finally { busy(-1); }
+      toast(ok ? 'Read the service symbology of ' + ok + ' of ' + svc.length + ' layer' + (svc.length === 1 ? '' : 's') + '.' : 'None of the service layers returned a symbol I can use.', ok ? '' : 'warn');
+    }
+
     /* ----- one entry point for everything the user picks or drops ----- */
     window.__lgRoute = async files => {
       const rest = [];
@@ -5419,6 +5732,10 @@ const GGCore = (function () {
           if (/\.json$/i.test(n) && f.size < 2e6) {
             let o = null; try { o = JSON.parse(await f.text()); } catch (e) { /* not JSON: let the importer report it */ }
             if (isSym(o)) { loadSymObj(o, n); continue; }
+          }
+          if (/\.(qml|sld|lyrx|lyr|xml|json|esrijson)$/i.test(n) && f.size < 5e6) {
+            const res = await SYMFMT.convert(f);
+            if (res) { finishImport(res, n); continue; }
           }
         } catch (e) { toast(n + ': ' + (e.message || e), 'err'); continue; }
         rest.push(f);
@@ -5436,9 +5753,13 @@ const GGCore = (function () {
         '<button class="btn" data-ld="tool-toggle" data-name="' + esc(t.name) + '">' + (live.has(t.name) ? 'Stop' : 'Run') + '</button>' +
         '<button class="btn" data-ld="tool-del" data-name="' + esc(t.name) + '">Remove</button></div>').join('') || '<div class="ld-empty">No tool loaded yet.</div>';
       box.innerHTML =
-        '<div class="ld-drop"><button class="btn primary" data-ld="pick">Load file…</button><span class="hint">Choose a <b>symbology</b> (.json), a <b>tool</b> (.js) or a data file (Shapefile .zip, KML, KMZ, GeoJSON, GPX, CSV, WKT). You can also drag files onto the map.</span></div>' +
+        '<div class="ld-drop"><button class="btn primary" data-ld="pick">Load file…</button><span class="hint">Choose a <b>symbology</b> (.json, .qml, .sld, .lyrx), a <b>tool</b> (.js) or a data file (Shapefile .zip, KML, KMZ, GeoJSON, GPX, CSV, WKT). You can also drag files onto the map.</span></div>' +
         '<div class="ld-h">Symbologies</div>' + symRows +
         '<div class="ld-acts"><button class="btn" data-ld="sym-save">Save current symbology</button><button class="btn" data-ld="sym-sample">Download sample symbology</button></div>' +
+        '<div class="ld-h">Import symbology from other programs</div>' +
+        '<div class="ld-drop"><button class="btn primary" data-ld="sym-import">Import symbology file…</button><span class="hint">QGIS <b>.qml</b>, GeoServer / QGIS <b>.sld</b>, ArcGIS Pro <b>.lyrx</b>, ArcGIS layer or web-map <b>.json</b>, Mapbox / MapLibre style <b>.json</b>. You can also drag these files onto the map.</span></div>' +
+        '<div class="ld-row"><input type="text" id="ldSymUrl" placeholder="ArcGIS layer address, e.g. https://…/FeatureServer/0" style="flex:1;min-width:200px;border:1px solid var(--line);border-radius:5px;padding:6px 8px" autocomplete="off" spellcheck="false"><button class="btn" data-ld="sym-url">Read from address</button></div>' +
+        '<div class="ld-acts"><button class="btn" data-ld="sym-svc" title="Ask the server of each loaded service layer for its own colours and apply them">Read symbology of loaded service layers</button></div>' +
         '<div class="ld-h">Tools</div>' + toolRows +
         '<div class="ld-acts"><button class="btn" data-ld="tool-sample">Download sample tool</button></div>' +
         '<p class="hint">A symbology file styles layers by name (wildcards <code>*</code> and <code>?</code> work) or by type (polygon, line, point). Colors, widths, transparency, line style, point shape and labels are supported, and they carry into the exported PDF.<br><b>Only load tools from people you trust:</b> a tool is a program that runs in this page and can read and change your layers. Loaded symbologies and tools are kept in this browser and come back next time.</p>';
@@ -5446,6 +5767,9 @@ const GGCore = (function () {
     box.addEventListener('click', async e => {
       const b = e.target.closest('[data-ld]'); if (!b) return; const a = b.dataset.ld;
       if (a === 'pick') $('#ldFile').click();
+      else if (a === 'sym-import') { $('#ldFile').click(); }
+      else if (a === 'sym-url') importFromUrl(($('#ldSymUrl') || {}).value);
+      else if (a === 'sym-svc') importFromServiceLayers();
       else if (a === 'sym-all' || a === 'sym-one') {
         const s = symSets.find(x => x.id === b.dataset.id); if (!s) return;
         const targets = a === 'sym-all' ? layers : layers.filter(l => l.id === activeId);
