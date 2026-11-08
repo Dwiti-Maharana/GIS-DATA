@@ -31,6 +31,15 @@ button{cursor:pointer}
 .urlbar input::placeholder{color:#7f97a4}
 #urlInput{flex:1}
 #tokenInput{width:170px}
+.ld-drop{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px;border:1px dashed var(--line);border-radius:8px;background:var(--accent-l)}
+.ld-drop .hint{flex:1;min-width:200px;margin:0}
+.ld-h{margin:16px 0 6px;font-weight:700}
+.ld-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--line);border-radius:6px;margin-bottom:6px}
+.ld-row b{flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ld-row small{color:var(--muted);font-weight:400;margin-left:4px}
+.ld-row .btn{padding:4px 9px;font-size:12.5px}
+.ld-empty{color:var(--muted);font-size:12.5px;padding:2px 0 4px}
+.ld-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 .btn{border:1px solid var(--line);background:#fff;border-radius:5px;padding:7px 13px;font-weight:550}
 .btn:hover{background:#f0f3f1}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -504,6 +513,10 @@ html.unlocked #gate{display:none}
       <input type="file" id="impFile" multiple hidden accept=".zip,.kmz,.kml,.geojson,.json,.esrijson,.gpx,.csv,.tsv,.txt,.wkt,.shp,.dbf,.prj,.cpg,.shx">
     </div><div class="grp-cap">Import</div></div>
     <div class="grp"><div class="grp-btns">
+      <button class="tool" id="btnLoad" data-icon="plug" title="Load symbology files and your own tools (plugins), or any data file">Load tools</button>
+    </div><div class="grp-cap">Load</div></div>
+    <div class="grp" id="grpLoaded" hidden><div class="grp-btns" id="loadedBtns"></div><div class="grp-cap">Loaded tools</div></div>
+    <div class="grp"><div class="grp-btns">
       <button class="tool" id="btnNewLayer" data-icon="newlayer" title="Create an editable layer: choose polygon, line or point and set its attribute fields">New layer</button>
       <button class="tool" id="btnCopyLayer" data-icon="copy" title="Copy an online (read-only) layer, or the selected features, into a new or existing editable layer so you can edit it">Copy to editable</button>
       <button class="tool" id="btnFields" data-icon="fields" title="Add, rename or delete the attribute fields of the active editable layer">Edit fields</button>
@@ -656,6 +669,16 @@ html.unlocked #gate{display:none}
 </div>
 
 <!-- Export PDF dialog -->
+<!-- Load dialog -->
+<div class="overlay" id="loadModal" hidden>
+  <div class="modal" style="width:min(640px,100%)" role="dialog" aria-modal="true" aria-labelledby="ldTitleH">
+    <div class="modal-head"><h2 id="ldTitleH">Load symbologies and tools</h2><button class="x" data-close aria-label="Close">×</button></div>
+    <div class="modal-body" id="ldBody"></div>
+    <input type="file" id="ldFile" multiple hidden accept=".js,.json,.esrijson,.geojson,.zip,.kmz,.kml,.gpx,.csv,.tsv,.txt,.wkt,.shp,.dbf,.prj,.cpg,.shx">
+    <div class="modal-foot"><button class="btn" data-close>Close</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="pdfModal" hidden>
   <div class="modal" style="width:min(760px,100%)" role="dialog" aria-modal="true" aria-labelledby="pdfTitleH">
     <div class="modal-head"><h2 id="pdfTitleH">Export map area to PDF</h2><button class="x" data-close aria-label="Close">×</button></div>
@@ -677,6 +700,9 @@ html.unlocked #gate{display:none}
         <label class="chk"><input type="checkbox" id="pdfLegend" checked><span>Legend</span></label>
         <label class="chk"><input type="checkbox" id="pdfScale" checked><span>Scale bar &amp; north arrow</span></label>
         <label class="chk"><input type="checkbox" id="pdfLabels" checked><span>Feature labels</span></label>
+      </div>
+      <div class="chk-row">
+        <label class="chk"><input type="checkbox" id="pdfLayered" checked><span><b>Layered PDF</b> – every layer can be switched on/off in the PDF Layers panel (Adobe Reader / Acrobat), features stay sharp vectors. Untick for a single flat picture.</span></label>
       </div>
       <div class="ex-status" id="pdfStatus" role="status"></div>
       <div class="bar" id="pdfBarWrap" hidden><div id="pdfBar"></div></div>
@@ -728,6 +754,7 @@ html.unlocked #gate{display:none}
         <li><b>Select &amp; edit:</b> <b>Select</b> clicks a feature (Shift adds) or drags a box; <b>Move</b> drags features; <b>Vertices</b> lets you drag a feature’s dots, drag a pale middle dot to add a corner, and right-click a dot to delete it; <b>Attributes</b> jumps to the Attributes pane on the right, which edits one feature or all selected features at once (pick “All N features” in its list; fields showing ‹multiple values› differ, and only fields you change are updated); <b>Delete</b>, <b>Undo</b> (Ctrl+Z) and <b>Redo</b> (Ctrl+Y) work as you’d expect. In the attribute table, click a row to select it and double-click a cell to edit it. <b>Edit fields</b> adds, renames or removes attribute fields. Area, length and coordinates are filled in automatically.</li>
         <li><b>Rename a layer</b> with the Rename button on its card in Contents (or double-click its name). Hand-drawn layers are auto-saved in this browser and come back when you reopen the page; use <b>Download drawn</b> (all features, or just the selected ones) to keep a real file.</li>
         <li><b>Street View:</b> press <b>Street View</b> on the ribbon, then click a road on the map. The screen splits and Google Street View opens on the right, with a Google-style blue dot and view cone on the map showing where you are and which way you face. Drag that dot along the road to move Street View with it (it snaps to the nearest road), or click elsewhere to jump, drag the grey bar between the two halves to resize, and press ✕ to close. Paste a Google Maps API key (Maps JavaScript API) into the ribbon box for the full interactive view where the marker follows you as you move along the road; without a key a basic embedded view is used. The key is kept only in this browser.</li>
+        <li><b>Load tools:</b> press <b>Load tools</b> and then <b>Load file…</b> to pick a file. A <b>symbology</b> file (.json) styles your layers by name or type (colors, widths, transparency, line style, point shape, labels) and is kept in the browser so you can apply it again later; use <b>Save current symbology</b> to make one from the styles you have set. A <b>tool</b> file (.js) adds its own buttons to a “Loaded tools” group on the toolbar. Download the sample files in that window to see the format. Only load tools from people you trust.</li>
         <li><b>Import file:</b> press <b>Import file</b> in the Import group (or drag files onto the map) to load a Shapefile (a .zip, or select the .shp + .dbf + .prj together), KML, KMZ, GeoJSON / Esri JSON, GPX, CSV/TSV with latitude/longitude columns or a WKT column, or a .wkt file. Several files can be picked at once. Projected shapefiles are converted to lat/lon using their .prj. Each import becomes an editable layer (separate layers for polygons, lines and points when a file mixes them), so you can edit it and download it again in any format. File Geodatabases (.gdb), GeoPackage, DWG/DXF are not supported – convert them to Shapefile or GeoJSON first.</li>
         <li><b>Download several layers at once:</b> open any Download dialog and tick more layers under “Also download these layers”. They are saved together in one .zip (all files together in a single folder, no sub-folders per layer). Hand-drawn and imported layers are saved in full; service layers use the area you choose, falling back to the current map view if nothing is traced or selected on them.</li>
         <li>Shapefiles come as a .zip. Unzip it before opening in ArcGIS or QGIS. Shapefile field names are cut to 10 characters, so a <code>_field_names.txt</code> file lists the original names.</li>
@@ -1272,7 +1299,8 @@ const GGCore = (function () {
     circ: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12h8"/><circle cx="12" cy="12" r="1.2"/></svg>',
     paste: '<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="1.5"/><path d="M9 5V3.5h6V5M9 11h6M9 15h6"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></svg>',
-    trace: '<svg viewBox="0 0 24 24"><path d="M4 18c3-8 6 2 9-5s4-5 7-9"/><circle cx="4" cy="18" r="1.6"/></svg>'
+    trace: '<svg viewBox="0 0 24 24"><path d="M4 18c3-8 6 2 9-5s4-5 7-9"/><circle cx="4" cy="18" r="1.6"/></svg>',
+    plug: '<svg viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0zM12 18v3"/></svg>'
   };
   $$('[data-icon]').forEach(b => { b.insertAdjacentHTML('afterbegin', ICONS[b.dataset.icon] || ''); });
 
@@ -2299,6 +2327,8 @@ const GGCore = (function () {
     const SUPPORTED = 'Shapefile (.zip or .shp + .dbf + .prj), KML, KMZ, GeoJSON / JSON, Esri JSON, GPX, CSV / TSV / TXT (lat/lon or WKT column), WKT';
     const MERC_MAX = 20037508.35;
     const inp = $('#impFile');
+    window.__lgAddFeatures = r => addImported(r);
+    window.__lgImportFiles = files => importFiles(files);
     $('#btnImport').addEventListener('click', () => inp.click());
     inp.addEventListener('change', () => { const fs = Array.from(inp.files || []); inp.value = ''; importFiles(fs); });
     const drop = $('#mapwrap');
@@ -2643,6 +2673,7 @@ const GGCore = (function () {
 
     async function importFiles(files) {
       if (!files.length) return;
+      if (window.__lgRoute) { files = await window.__lgRoute(files); if (!files.length) return; }
       busy(1); setMsg('Reading ' + (files.length === 1 ? files[0].name : files.length + ' files') + '…');
       const results = [], errors = [];
       try {
@@ -4252,7 +4283,305 @@ const GGCore = (function () {
       else { setPdfStatus(e.message || String(e), 'err'); setPdfProgress(null); toast('PDF export failed: ' + (e.message || e), 'err'); }
     } finally { busy(-1); pdfRunning = false; setPdfBusy(false); }
   }
-  $('#pdfGo').addEventListener('click', pdfExport);
+  /* 5b. LAYERED PDF: every map layer becomes a real PDF layer (Optional Content Group) that can be switched
+         on/off in Adobe Reader's Layers panel, like a PDF published from AutoCAD. Features are written as
+         vector graphics (sharp at any zoom); only the basemap is an image (in its own "Basemap" layer). */
+  const PDF_MM = 72 / 25.4;
+  const pf = v => { const r = Math.round(v * 100) / 100; return String(r === 0 ? 0 : r); };
+  const pdfEsc = s => String(s).replace(/[\\()]/g, '\\$&');
+  const pdfLatin = s => pdfTxt(s).replace(/[\u007F-\u009F]/g, '?');
+  function pdfTextStr(s) {
+    s = String(s == null ? '' : s);
+    if (/^[\x20-\x7E]*$/.test(s)) return '(' + pdfEsc(s) + ')';
+    let h = 'FEFF'; for (let i = 0; i < s.length; i++) h += s.charCodeAt(i).toString(16).padStart(4, '0').toUpperCase();
+    return '<' + h + '>';
+  }
+  const pdfCC = document.createElement('canvas').getContext('2d');
+  function pdfRgb(c) {
+    pdfCC.fillStyle = '#000000'; try { pdfCC.fillStyle = c || '#000000'; } catch (e) { /* keep black */ }
+    const v = String(pdfCC.fillStyle); let r = 0, g = 0, b = 0, m;
+    if (v[0] === '#') { r = parseInt(v.substr(1, 2), 16); g = parseInt(v.substr(3, 2), 16); b = parseInt(v.substr(5, 2), 16); }
+    else if ((m = v.match(/[\d.]+/g))) { r = +m[0]; g = +m[1]; b = +m[2]; }
+    return [r / 255, g / 255, b / 255].map(x => x.toFixed(3)).join(' ');
+  }
+  const pdfMeasure = document.createElement('canvas').getContext('2d');
+  function pdfTextW(t, sz, fi) {
+    pdfMeasure.font = ((fi & 2) ? 'italic ' : '') + ((fi & 1) ? '700 ' : '400 ') + '100px Arial, Helvetica, sans-serif';
+    return pdfMeasure.measureText(t).width * sz / 100;
+  }
+  function pdfFit(t, maxW, sz, fi) {
+    t = pdfLatin(t); if (pdfTextW(t, sz, fi) <= maxW) return t;
+    while (t.length > 1 && pdfTextW(t + '...', sz, fi) > maxW) t = t.slice(0, -1);
+    return t + '...';
+  }
+  async function pdfDeflate(u8) {
+    if (typeof CompressionStream === 'undefined') return null;
+    try { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer()); }
+    catch (e) { return null; }
+  }
+  const pdfEnc = s => { const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 255; return u; };
+
+  /* one point symbol as PDF path operators, centred on (x,y) in PDF coordinates (y up) */
+  function pdfPtOps(shape, x, y, s) {
+    const h = s / 2, o = [], M = (dx, dy) => pf(x + dx) + ' ' + pf(y - dy) + ' m', L = (dx, dy) => pf(x + dx) + ' ' + pf(y - dy) + ' l';
+    if (shape === 'square') o.push(pf(x - h) + ' ' + pf(y - h) + ' ' + pf(s) + ' ' + pf(s) + ' re');
+    else if (shape === 'diamond') o.push(M(0, -h), L(h, 0), L(0, h), L(-h, 0), 'h');
+    else if (shape === 'triangle') o.push(M(0, -h), L(h, h), L(-h, h), 'h');
+    else if (shape === 'star') { for (let i = 0; i < 10; i++) { const r = i % 2 ? h * 0.45 : h * 1.05, a = -Math.PI / 2 + i * Math.PI / 5; o.push((i ? L : M)(r * Math.cos(a), r * Math.sin(a))); } o.push('h'); }
+    else if (shape === 'cross' || shape === 'x') {
+      const t = s / 6, P = [[-t, -h], [t, -h], [t, -t], [h, -t], [h, t], [t, t], [t, h], [-t, h], [-t, t], [-h, t], [-h, -t], [-t, -t]], ca = shape === 'x' ? Math.SQRT1_2 : 1, sa = shape === 'x' ? Math.SQRT1_2 : 0;
+      P.forEach((p, i) => { const dx = p[0] * ca - p[1] * sa, dy = p[0] * sa + p[1] * ca; o.push((i ? L : M)(dx, dy)); }); o.push('h');
+    } else {
+      const k = 0.5523 * h, c = (a, b, c2, d, e, f) => [a, b, c2, d, e, f].map((v, i) => pf((i % 2 ? y : x) + v)).join(' ') + ' c';
+      o.push(pf(x + h) + ' ' + pf(y) + ' m', c(h, k, k, h, 0, h), c(-k, h, -h, k, -h, 0), c(-h, -k, -k, -h, 0, -h), c(k, -h, h, -k, h, 0), 'h');
+    }
+    return o.join('\n') + '\n';
+  }
+
+  async function pdfExportLayered() {
+    clearTimeout(pdfTimer);
+    const tok = ++pdfToken; if (pdfAbort) pdfAbort.abort();
+    const ac = pdfAbort = new AbortController(); pdfRunning = true; setPdfBusy(true); setPdfProgress(0.05); busy(1);
+    const stale = () => tok !== pdfToken || ac.signal.aborted;
+    try {
+      const o = pdfOpts(), lay = pdfLayout(o), MM = PDF_MM;
+      for (const id of o.ids) { await pdfLoad(byId(id), ac.signal); if (stale()) throw pdfAbortErr(); }
+
+      /* ----- page geometry (PDF points, origin bottom-left) ----- */
+      const PW = lay.pw * MM, PH = lay.ph * MM, fy = lay.m + lay.titleH;
+      const fx = lay.m * MM, fw = lay.frameW * MM, fh = lay.frameH * MM, ftop = fy * MM, fyb = PH - ftop - fh;
+      const xm = mm => mm * MM, ym = mm => PH - mm * MM;
+      const rectMm = (x, y, w, h) => pf(xm(x)) + ' ' + pf(ym(y + h)) + ' ' + pf(w * MM) + ' ' + pf(h * MM) + ' re\n';
+
+      /* ----- map -> page transform ----- */
+      const b = pdfBounds, x0 = pdfMx(b.getWest()), x1 = pdfMx(b.getEast()), y0 = pdfMy(b.getSouth()), y1 = pdfMy(b.getNorth());
+      const mpp = ((x1 - x0) / (y1 - y0) > fw / fh) ? (x1 - x0) / fw : (y1 - y0) / fh;
+      const left = (x0 + x1) / 2 - mpp * fw / 2, top = (y0 + y1) / 2 + mpp * fh / 2;
+      const Pp = q => [(pdfMx(q[0]) - left) / mpp, (top - pdfMy(q[1])) / mpp];          // points from the frame's top-left
+      const cl = v => Math.max(-30000, Math.min(30000, v));
+      const T = q => { const p = Pp(q); return [cl(fx + p[0]), cl(PH - ftop - p[1])]; };
+      const realPerMm = mpp * Math.cos(((b.getNorth() + b.getSouth()) / 2) * Math.PI / 180) * MM, scale = realPerMm * 1000;
+
+      /* ----- PDF object store ----- */
+      const objs = [], newObj = () => { objs.push(null); return objs.length; }, setObj = (n, parts) => { objs[n - 1] = parts; };
+      const catalogN = newObj(), pagesN = newObj(), pageN = newObj(), contentN = newObj(), infoN = newObj();
+      const fontN = ['Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique', 'Helvetica-BoldOblique'].map(nm => { const n = newObj(); setObj(n, ['<< /Type /Font /Subtype /Type1 /BaseFont /' + nm + ' /Encoding /WinAnsiEncoding >>']); return n; });
+      const ocgs = [], props = [];
+      const addOcg = name => {
+        const n = newObj(); setObj(n, ['<< /Type /OCG /Name ' + pdfTextStr(name) + ' /Intent /View /Usage << /Print << /PrintState /ON >> /View << /ViewState /ON >> >> >>']);
+        const g = { n, res: 'OC' + (ocgs.length + 1) }; ocgs.push(g); props.push([g.res, n]); return g;
+      };
+      const gsMap = new Map();
+      const gsOp = (ca, CA) => {
+        const key = ca.toFixed(3) + ' ' + CA.toFixed(3);
+        if (!gsMap.has(key)) gsMap.set(key, { name: 'GS' + (gsMap.size + 1), ca: ca.toFixed(3), CA: CA.toFixed(3) });
+        return '/' + gsMap.get(key).name + ' gs\n';
+      };
+      const C = [];            // page content stream pieces
+      const bdc = g => '/OC /' + g.res + ' BDC\n';
+
+      /* ----- styles / text helpers ----- */
+      const styleOps = (lyr, kind, sc, wCap) => {
+        const st = lyr.style || {}, lo = st.lineOp == null ? 1 : st.lineOp;
+        const fo = kind === 'pt' ? (st.fillOp == null ? 0.9 : st.fillOp) : (st.fillOp > 0 ? st.fillOp : 0);
+        let w = st.weight == null ? 1 : st.weight; if (wCap) w = Math.min(w, wCap);
+        const da = kind === 'pt' ? null : dashArr(st.dash, st.weight == null ? 1 : st.weight);
+        return gsOp(fo, lo) + pdfRgb(st.line) + ' RG\n' + pdfRgb(st.fill) + ' rg\n' + pf(Math.max(0.2, w * sc)) + ' w\n1 j\n' +
+          (da ? '[' + da.split(',').map(v => pf(Number(v) * sc)).join(' ') + '] 0 d\n' : '[] 0 d\n') + (st.dash === 'dot' && kind !== 'pt' ? '1' : '0') + ' J\n';
+      };
+      const paintOp = (fillOn, strokeOn, evenodd) => fillOn && strokeOn ? (evenodd ? 'B*' : 'B') : fillOn ? (evenodd ? 'f*' : 'f') : strokeOn ? 'S' : 'n';
+      const txtOp = (t, x, y, sz, fi, rgb, align) => {
+        t = pdfLatin(t); const w = pdfTextW(t, sz, fi); if (align === 'center') x -= w / 2; else if (align === 'right') x -= w;
+        return pdfRgb(rgb) + ' rg\nBT /F' + (fi + 1) + ' ' + pf(sz) + ' Tf ' + pf(x) + ' ' + pf(y) + ' Td (' + pdfEsc(t) + ') Tj ET\n';
+      };
+      const ring = (pts, closed) => {
+        let s = '', lx = NaN, ly = NaN; const n = pts.length;
+        for (let i = 0; i < n; i++) {
+          const p = T(pts[i]); if (!isFinite(p[0]) || !isFinite(p[1])) continue;
+          if (!isNaN(lx) && i < n - 1 && Math.abs(p[0] - lx) + Math.abs(p[1] - ly) < 0.08) continue;
+          s += pf(p[0]) + ' ' + pf(p[1]) + (isNaN(lx) ? ' m\n' : ' l\n'); lx = p[0]; ly = p[1];
+        }
+        return closed && s ? s + 'h\n' : s;
+      };
+
+      /* ----- basemap image (own layer) ----- */
+      setPdfStatus('Drawing the basemap…'); setPdfProgress(0.2);
+      let r = { tiles: 0, failed: 0, attrib: [] }, baseG = null, imgN = 0;
+      if (o.basemap && BASEMAPS[o.basemap]) {
+        let wpx = Math.round(lay.frameW / 25.4 * o.dpi), hpx = Math.round(lay.frameH / 25.4 * o.dpi);
+        const f = Math.min(1, 7000 / Math.max(wpx, hpx), Math.sqrt(36e6 / (wpx * hpx))); wpx = Math.round(wpx * f); hpx = Math.round(hpx * f);
+        r = await pdfRender({ o: Object.assign({}, o, { ids: [] }), lay, wpx, hpx, dpi: wpx / (lay.frameW / 25.4), stale });
+        const blob = await new Promise(res => r.canvas.toBlob(res, 'image/jpeg', 0.9));
+        const jpg = new Uint8Array(await blob.arrayBuffer());
+        imgN = newObj(); setObj(imgN, ['<< /Type /XObject /Subtype /Image /Width ' + r.canvas.width + ' /Height ' + r.canvas.height + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpg.length + ' >>\nstream\n', jpg, '\nendstream']);
+        baseG = addOcg('Basemap');
+      }
+
+      /* ----- title ----- */
+      const date = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      if (o.title) {
+        C.push(txtOp(pdfFit(o.title, lay.pw * MM - 2 * fx, 16, 1), fx, ym(lay.m + 6), 16, 1, '#14222d', 'left'));
+        C.push(txtOp('Approx. scale 1:' + nf(Math.round(scale)) + '  |  ' + date, fx, ym(lay.m + 10.5), 8, 0, '#646e76', 'left'));
+      }
+
+      /* ----- map layers (clipped to the frame) ----- */
+      setPdfStatus('Writing the layers…'); setPdfProgress(0.45);
+      C.push('q\n' + pf(fx) + ' ' + pf(fyb) + ' ' + pf(fw) + ' ' + pf(fh) + ' re W n\n');
+      if (baseG) C.push(bdc(baseG) + 'q ' + pf(fw) + ' 0 0 ' + pf(fh) + ' ' + pf(fx) + ' ' + pf(fyb) + ' cm /Im1 Do Q\nEMC\n');
+      const layerG = {}, labelG = {}; let done = 0;
+      for (let li = o.ids.length - 1; li >= 0; li--) {                 // bottom layer first
+        const lyr = byId(o.ids[li]); if (!lyr) continue;
+        const d = lyr.manual ? { features: Array.from(lyr.sel.values()) } : pdfData[lyr.id], feats = d ? d.features : [];
+        const st = lyr.style || {}, sc = 0.75;                           // 1 CSS px = 0.75 pt
+        const polyBuf = [], lineBuf = [], ptBuf = [];
+        const polyOp = paintOp(st.fillOp > 0, (st.weight == null ? 1 : st.weight) > 0, true);
+        const ptOp = paintOp((st.fillOp == null ? 0.9 : st.fillOp) > 0, (st.weight == null ? 1 : st.weight) > 0, false);
+        const ps = ptSize(lyr) * sc, shape = st.shape || 'circle';
+        const addPt = c => { const p = T(c); if (p[0] < fx - ps || p[0] > fx + fw + ps || p[1] < fyb - ps || p[1] > fyb + fh + ps) return; ptBuf.push(pdfPtOps(shape, p[0], p[1], ps) + ptOp + '\n'); };
+        const addGeom = g => {
+          if (!g) return;
+          if (g.type === 'GeometryCollection') { g.geometries.forEach(addGeom); return; }
+          const t = g.type, c = g.coordinates;
+          if (t === 'Point') addPt(c);
+          else if (t === 'MultiPoint') c.forEach(addPt);
+          else if (t === 'LineString' || t === 'MultiLineString') { let s = ''; (t === 'LineString' ? [c] : c).forEach(ln => { s += ring(ln, false); }); if (s) lineBuf.push(s + 'S\n'); }
+          else if (t === 'Polygon' || t === 'MultiPolygon') { let s = ''; (t === 'Polygon' ? [c] : c).forEach(poly => poly.forEach(rg => { s += ring(rg, true); })); if (s) polyBuf.push(s + polyOp + '\n'); }
+        };
+        let c = 0;
+        for (const f of feats) { addGeom(f.geometry); if (++c % 3000 === 0) { if (stale()) throw pdfAbortErr(); await pdfYield(); } }
+        const g = layerG[lyr.id] = addOcg(lyr.name || 'Layer');
+        let s = bdc(g);
+        if (polyBuf.length) s += 'q\n' + styleOps(lyr, 'poly', sc) + polyBuf.join('') + 'Q\n';
+        if (lineBuf.length) s += 'q\n' + styleOps(lyr, 'line', sc) + lineBuf.join('') + 'Q\n';
+        if (ptBuf.length) s += 'q\n' + styleOps(lyr, 'pt', sc) + ptBuf.join('') + 'Q\n';
+        C.push(s + 'EMC\n');
+
+        /* labels: their own sub-layer, only visible while the parent layer is on */
+        const flds = lyr.labelFields || [];
+        if (o.labels && flds.length) {
+          let n = 0, ls = '';
+          for (const f of feats) {
+            if (n > 3000) break;
+            const a = pdfAnchor(f.geometry, Pp); if (!a || !isFinite(a[0]) || !isFinite(a[1]) || a[0] < 0 || a[1] < 0 || a[0] > fw || a[1] > fh) continue;
+            const pt = f.geometry && (f.geometry.type === 'Point' || f.geometry.type === 'MultiPoint'), lines = [];
+            flds.forEach(nm => { const v = f.properties && f.properties[nm]; if (v !== null && v !== undefined && String(v).trim() !== '') lines.push({ t: pdfLatin(v), s: Object.assign(defLS(), (lyr.labelStyles || {})[nm] || {}) }); });
+            if (!lines.length) continue; n++;
+            let yy = a[1] - lines.reduce((q, l) => q + l.s.size * sc * 1.15, 0) / 2;
+            lines.forEach(l => {
+              const sz = l.s.size * sc, fi = (l.s.bold ? 1 : 0) + (l.s.italic ? 2 : 0), w = pdfTextW(l.t, sz, fi);
+              const x = pt ? a[0] + 8 * sc : a[0] - w / 2, X = fx + x, Y = PH - ftop - (yy + sz * 0.8);
+              ls += pf(Math.max(0.9, sz / 4)) + ' w\n' + (lumOf(l.s.color) > 0.6 ? '0 0 0' : '1 1 1') + ' RG\n' + pdfRgb(l.s.color) + ' rg\n1 j\n' +
+                'BT /F' + (fi + 1) + ' ' + pf(sz) + ' Tf ' + pf(X) + ' ' + pf(Y) + ' Td 1 Tr (' + pdfEsc(l.t) + ') Tj ET\n' +
+                'BT /F' + (fi + 1) + ' ' + pf(sz) + ' Tf ' + pf(X) + ' ' + pf(Y) + ' Td 0 Tr (' + pdfEsc(l.t) + ') Tj ET\n';
+              yy += sz * 1.15;
+            });
+          }
+          if (ls) {
+            const lg = labelG[lyr.id] = addOcg((lyr.name || 'Layer') + ' labels');
+            const mc = newObj(); setObj(mc, ['<< /Type /OCMD /OCGs [' + g.n + ' 0 R ' + lg.n + ' 0 R] /P /AllOn >>']); props.push(['OM' + mc, mc]);
+            C.push('/OC /OM' + mc + ' BDC\nq\n' + gsOp(1, 1) + ls + 'Q\nEMC\n');
+          }
+        }
+        if (++done % 2 === 0) { await pdfYield(); if (stale()) throw pdfAbortErr(); }
+      }
+      C.push('Q\n');                                                     // end clip
+
+      /* ----- frame ----- */
+      C.push(pf(0.3 * MM) + ' w 0.157 0.196 0.227 RG\n' + pf(fx) + ' ' + pf(fyb) + ' ' + pf(fw) + ' ' + pf(fh) + ' re S\n');
+
+      /* ----- scale bar + north arrow (own layer) ----- */
+      let scaleG = null;
+      if (o.scalebar) {
+        scaleG = addOcg('Scale bar and north arrow');
+        const target = 40 * realPerMm, pw10 = Math.pow(10, Math.floor(Math.log10(target)));
+        let nice = pw10; [2, 5, 10].forEach(q => { if (pw10 * q <= target) nice = pw10 * q; });
+        const barMm = nice / realPerMm, bx = lay.m + 3, by = fy + lay.frameH - 3 - 11, bw = barMm + 14;
+        let s = bdc(scaleG) + 'q\n' + gsOp(0.85, 0.85) + '1 1 1 rg\n' + rectMm(bx, by, bw, 11) + 'f\n' + gsOp(1, 1) + '0.2 w 0.078 0.078 0.078 RG\n';
+        for (let i = 0; i < 4; i++) s += (i % 2 ? '1 1 1' : '0.078 0.078 0.078') + ' rg\n' + rectMm(bx + 7 + i * barMm / 4, by + 5.2, barMm / 4, 2.2) + 'B\n';
+        s += txtOp('0', xm(bx + 7), ym(by + 4), 7, 0, '#141414', 'center') + txtOp(nice >= 1000 ? (nice / 1000) + ' km' : nice + ' m', xm(bx + 7 + barMm), ym(by + 4), 7, 0, '#141414', 'center');
+        const nx = lay.m + lay.frameW - 3 - 11, ny = fy + 3;
+        s += gsOp(0.85, 0.85) + '1 1 1 rg\n' + rectMm(nx, ny, 11, 15) + 'f\n' + gsOp(1, 1) + '0.078 0.078 0.078 rg\n' +
+          pf(xm(nx + 5.5)) + ' ' + pf(ym(ny + 2.5)) + ' m ' + pf(xm(nx + 2.5)) + ' ' + pf(ym(ny + 10.5)) + ' l ' + pf(xm(nx + 8.5)) + ' ' + pf(ym(ny + 10.5)) + ' l h f\n' +
+          txtOp('N', xm(nx + 5.5), ym(ny + 14), 8, 1, '#141414', 'center');
+        C.push(s + 'Q\nEMC\n');
+      }
+
+      /* ----- legend (own layer; swatches are vector too) ----- */
+      let legendG = null;
+      if (lay.legendH) {
+        legendG = addOcg('Legend');
+        const ly = fy + lay.frameH + 2, colW = lay.frameW / lay.cols;
+        let s = bdc(legendG) + '0.2 w 0.784 0.804 0.792 RG\n' + pf(xm(lay.m)) + ' ' + pf(ym(ly)) + ' m ' + pf(xm(lay.m + lay.frameW)) + ' ' + pf(ym(ly)) + ' l S\n' + txtOp('Legend', xm(lay.m), ym(ly + 5), 9, 1, '#14222d', 'left');
+        o.ids.forEach((id, i) => {
+          const l = byId(id); if (!l) return;
+          const cx = lay.m + (i % lay.cols) * colW, cy = ly + 8 + Math.floor(i / lay.cols) * 6.5, W = 9 * MM, u = W / 96, kind = gkind(l), st = l.style || {};
+          const U = q => [xm(cx) + q[0] * u, ym(cy) - q[1] * u];
+          const P2 = (q, cmd) => { const p = U(q); return pf(p[0]) + ' ' + pf(p[1]) + ' ' + cmd + '\n'; };
+          s += 'q\n';
+          if (kind === 'polygon') {
+            s += styleOps(l, 'poly', 2.2 * u, 3) + P2([10, 10], 'm') + P2([86, 10], 'l') + P2([86, 50], 'l') + P2([10, 50], 'l') + 'h\n' + paintOp(st.fillOp > 0, (st.weight == null ? 1 : st.weight) > 0, true) + '\n';
+          } else if (kind === 'line') {
+            const a = U([34, 46]), bb = U([40, 14]), e = U([88, 14]);
+            s += styleOps(l, 'line', 2.2 * u, 3.5) + P2([8, 46], 'm') + [a, bb, e].map(p => pf(p[0]) + ' ' + pf(p[1])).join(' ') + ' c\nS\n';
+          } else {
+            const p = U([48, 30]);
+            s += styleOps(l, 'pt', 2.2 * u) + pdfPtOps(st.shape || 'circle', p[0], p[1], Math.min(ptSize(l), 14) * 2.2 * u) + paintOp((st.fillOp == null ? 0.9 : st.fillOp) > 0, (st.weight == null ? 1 : st.weight) > 0, false) + '\n';
+          }
+          s += 'Q\n' + txtOp(pdfFit(l.name, colW - 13, 8.5, 0), xm(cx + 11), ym(cy + 3.9), 8.5, 0, '#14222d', 'left');
+        });
+        C.push(s + 'EMC\n');
+      }
+
+      /* ----- footer ----- */
+      const foot = (r.attrib.length ? 'Basemap: ' + r.attrib.join(' | ') : 'No basemap') + (r.tiles && r.failed ? ' (some tiles missing)' : '');
+      C.push(txtOp(pdfFit(foot, lay.frameW * 0.72 * MM, 6.5, 0), fx, ym(lay.ph - lay.m + 1), 6.5, 0, '#78808a', 'left') +
+             txtOp(date + '  |  Layer Grabber By Dwiti', xm(lay.pw - lay.m), ym(lay.ph - lay.m + 1), 6.5, 0, '#78808a', 'right'));
+
+      /* ----- assemble the PDF file ----- */
+      setPdfStatus('Writing the PDF…'); setPdfProgress(0.8); await pdfYield();
+      let content = pdfEnc(C.join('')), cflt = '';
+      const z = await pdfDeflate(content); if (z && z.length < content.length) { content = z; cflt = ' /Filter /FlateDecode'; }
+      setObj(contentN, ['<< /Length ' + content.length + cflt + ' >>\nstream\n', content, '\nendstream']);
+
+      const gsRes = Array.from(gsMap.values()).map(g => { const n = newObj(); setObj(n, ['<< /Type /ExtGState /ca ' + g.ca + ' /CA ' + g.CA + ' >>']); return '/' + g.name + ' ' + n + ' 0 R'; }).join(' ');
+      const propRes = props.map(p => '/' + p[0] + ' ' + p[1] + ' 0 R').join(' ');
+      setObj(pageN, ['<< /Type /Page /Parent ' + pagesN + ' 0 R /MediaBox [0 0 ' + pf(PW) + ' ' + pf(PH) + '] /Contents ' + contentN + ' 0 R /Resources << /Font << ' +
+        fontN.map((n, i) => '/F' + (i + 1) + ' ' + n + ' 0 R').join(' ') + ' >> /ExtGState << ' + gsRes + ' >> /Properties << ' + propRes + ' >>' + (imgN ? ' /XObject << /Im1 ' + imgN + ' 0 R >>' : '') + ' >> >>']);
+      setObj(pagesN, ['<< /Type /Pages /Kids [' + pageN + ' 0 R] /Count 1 >>']);
+
+      /* Layers panel order: furniture on top, then map layers (top first, labels nested under their layer), basemap last */
+      const order = [];
+      if (legendG) order.push(legendG.n + ' 0 R'); if (scaleG) order.push(scaleG.n + ' 0 R');
+      o.ids.forEach(id => { const g = layerG[id]; if (!g) return; order.push(g.n + ' 0 R'); if (labelG[id]) order.push('[' + labelG[id].n + ' 0 R]'); });
+      if (baseG) order.push(baseG.n + ' 0 R');
+      const all = ocgs.map(g => g.n + ' 0 R').join(' ');
+      setObj(catalogN, ['<< /Type /Catalog /Pages ' + pagesN + ' 0 R /PageMode /UseOC /OCProperties << /OCGs [' + all + '] /D << /Name (Layers) /BaseState /ON /Order [' + order.join(' ') + '] >> >> >>']);
+      const dt = new Date(), p2 = v => String(v).padStart(2, '0');
+      setObj(infoN, ['<< /Title ' + pdfTextStr(o.title || 'Map') + ' /Creator (Layer Grabber By Dwiti) /Producer (Layer Grabber By Dwiti) /CreationDate (D:' + dt.getFullYear() + p2(dt.getMonth() + 1) + p2(dt.getDate()) + p2(dt.getHours()) + p2(dt.getMinutes()) + p2(dt.getSeconds()) + ') >>']);
+
+      const parts = [pdfEnc('%PDF-1.5\n%\xE2\xE3\xCF\xD3\n')], offs = []; let pos = parts[0].length;
+      objs.forEach((pc, i) => {
+        offs.push(pos); const head = pdfEnc((i + 1) + ' 0 obj\n'), tail = pdfEnc('\nendobj\n');
+        parts.push(head); pos += head.length;
+        pc.forEach(p => { const u = typeof p === 'string' ? pdfEnc(p) : p; parts.push(u); pos += u.length; });
+        parts.push(tail); pos += tail.length;
+      });
+      let xr = 'xref\n0 ' + (objs.length + 1) + '\n0000000000 65535 f \n';
+      offs.forEach(v => { xr += String(v).padStart(10, '0') + ' 00000 n \n'; });
+      xr += 'trailer\n<< /Size ' + (objs.length + 1) + ' /Root ' + catalogN + ' 0 R /Info ' + infoN + ' 0 R >>\nstartxref\n' + pos + '\n%%EOF\n';
+      parts.push(pdfEnc(xr));
+      const blob = new Blob(parts, { type: 'application/pdf' }), name = GGCore.sanitizeName(o.title || 'map') + '.pdf';
+      setPdfProgress(0.95); download(blob, name); setPdfProgress(1);
+      const nl = Object.keys(layerG).length;
+      const msg = 'Saved ' + name + ' (' + (blob.size / 1048576).toFixed(1) + ' MB) with ' + nl + ' map layer' + (nl === 1 ? '' : 's') + ' you can switch on/off in the PDF Layers panel' + (r.tiles && r.failed ? '. ' + r.failed + ' basemap tiles could not be loaded.' : '.');
+      setPdfStatus(msg, r.tiles && r.failed ? 'warn' : 'ok'); toast(msg);
+    } catch (e) {
+      if (e && e.name === 'AbortError') { setPdfStatus('Stopped.', 'warn'); setPdfProgress(null); }
+      else { setPdfStatus(e.message || String(e), 'err'); setPdfProgress(null); toast('PDF export failed: ' + (e.message || e), 'err'); }
+    } finally { busy(-1); pdfRunning = false; setPdfBusy(false); }
+  }
+
+  $('#pdfGo').addEventListener('click', () => ($('#pdfLayered').checked ? pdfExportLayered() : pdfExport()));
 
   /* ---------- misc wiring ---------- */
   (function wireProxy() {
@@ -4945,6 +5274,205 @@ const GGCore = (function () {
     cpClip = { srcName: 'Measurement', kind, fields: [], items, skipped: 0 }; syncHandUi(); cpPasteTo();
   }
   mSyncPrefUi();
+
+  /* ---------- Load: symbology files and your own tools (plugins) ---------- */
+  (function wireLoad() {
+    const LS_SYM = 'lgSymbologies', LS_TOOLS = 'lgTools';
+    const lsGet = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } };
+    const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { toast('Could not keep this in the browser (storage is full or blocked). It works until you close the page.', 'warn'); return false; } };
+    let symSets = lsGet(LS_SYM, []), tools = lsGet(LS_TOOLS, []);
+    if (!Array.isArray(symSets)) symSets = []; if (!Array.isArray(tools)) tools = [];
+    const live = new Map();                                   // tool file name -> { buttons: [] }
+    const modal = $('#loadModal'), box = $('#ldBody');
+
+    /* ----- symbology: validation + matching ----- */
+    const cc = document.createElement('canvas').getContext('2d');
+    function normColor(c) {
+      if (typeof c !== 'string') return null;
+      cc.fillStyle = '#000001'; cc.fillStyle = c; const v = String(cc.fillStyle);
+      if (v === '#000001' && c.trim().toLowerCase() !== '#000001') return null;
+      if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase();
+      const m = v.match(/[\d.]+/g); return m ? '#' + [0, 1, 2].map(i => Math.round(m[i]).toString(16).padStart(2, '0')).join('') : null;
+    }
+    function cleanStyle(s) {
+      const o = {}; if (!s || typeof s !== 'object') return o;
+      ['line', 'fill'].forEach(k => { const c = normColor(s[k]); if (c) o[k] = c; });
+      const num = (k, lo, hi) => { const v = Number(s[k]); if (s[k] !== undefined && s[k] !== null && s[k] !== '' && isFinite(v)) o[k] = Math.min(hi, Math.max(lo, v)); };
+      num('weight', 0, 12); num('fillOp', 0, 1); num('lineOp', 0, 1); num('size', 2, 60);
+      if (DASHES[s.dash]) o.dash = s.dash; if (SHAPES[s.shape]) o.shape = s.shape;
+      return o;
+    }
+    function cleanLabel(s) {
+      const o = {}; if (!s || typeof s !== 'object') return o;
+      const n = Number(s.size); if (isFinite(n) && s.size !== '' && s.size !== null) o.size = Math.min(60, Math.max(5, n));
+      ['bold', 'italic', 'underline', 'strike', 'bg', 'ln'].forEach(k => { if (typeof s[k] === 'boolean') o[k] = s[k]; });
+      ['color', 'bgColor', 'lnColor'].forEach(k => { const c = normColor(s[k]); if (c) o[k] = c; });
+      if (typeof s.font === 'string' && /^[\w .-]{1,40}$/.test(s.font)) o.font = s.font;
+      if (['left', 'center', 'right'].indexOf(s.align) >= 0) o.align = s.align;
+      return o;
+    }
+    const wild = (pat, s) => new RegExp('^' + String(pat).replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i').test(s);
+    function ruleFor(set, lyr) {
+      const k = gkind(lyr), rs = set.layers || [];
+      let r = rs.find(x => x && x.name && wild(x.name, lyr.name) && (!x.kind || x.kind === k));
+      if (!r) r = rs.find(x => x && !x.name && x.kind === k);
+      if (!r && set.default && set.default[k]) r = { style: set.default[k] };
+      return r;
+    }
+    function applySet(set, targets) {
+      let n = 0;
+      targets.forEach(lyr => {
+        const r = ruleFor(set, lyr); if (!r) return;
+        const st = cleanStyle(r.style); Object.assign(lyr.style, st);
+        if (gkind(lyr) === 'line' && st.line && !st.fill) lyr.style.fill = st.line;
+        let relabel = false;
+        if (r.labels && typeof r.labels === 'object') {
+          const names = (lyr.fields || []).map(f => f.name);
+          if (Array.isArray(r.labels.fields)) {
+            lyr.labelFields = r.labels.fields.map(w => names.find(nm => nm.toLowerCase() === String(w).toLowerCase())).filter(Boolean); relabel = true;
+          }
+          const ls = cleanLabel(r.labels.style);
+          if (Object.keys(ls).length) { lyr.labelStyles = lyr.labelStyles || {}; (lyr.labelFields || []).forEach(nm => { lyr.labelStyles[nm] = Object.assign(defLS(), lyr.labelStyles[nm] || {}, ls); }); relabel = true; }
+        }
+        restyle(lyr); if (relabel) redrawLayer(lyr); n++;
+      });
+      if (n) renderContents();
+      return n;
+    }
+    const isSym = o => !!o && typeof o === 'object' && !Array.isArray(o) && (o.type === 'layergrabber-symbology' || (Array.isArray(o.layers) && o.layers.length && !o.features && o.type !== 'FeatureCollection' && o.layers.every(r => r && typeof r === 'object' && r.style)));
+    function addSymbology(obj, fileName) {
+      if (!isSym(obj) && !(obj && obj.default)) throw new Error('This is not a symbology file (it needs a "layers" list with a "style" in each rule).');
+      const set = { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: String(obj.name || (fileName || 'Symbology').replace(/\.json$/i, '')).slice(0, 60), layers: (Array.isArray(obj.layers) ? obj.layers : []).slice(0, 500), default: obj.default && typeof obj.default === 'object' ? obj.default : null };
+      if (!set.layers.length && !set.default) throw new Error('The symbology has no rules.');
+      symSets = symSets.filter(s => s.name !== set.name); symSets.push(set); lsSet(LS_SYM, symSets); renderLoad();
+      return set;
+    }
+    function loadSymObj(obj, fileName) {
+      const set = addSymbology(obj, fileName), n = applySet(set, layers);
+      toast('Symbology “' + set.name + '” loaded' + (n ? ' and applied to ' + n + ' layer' + (n === 1 ? '' : 's') + '.' : '. No layer name matched yet – use Apply in the Load window.'), n ? '' : 'warn');
+    }
+    const firstLabelStyle = lyr => { const nm = (lyr.labelFields || [])[0], s = nm && lyr.labelStyles && lyr.labelStyles[nm]; return s ? cleanLabel(s) : null; };
+    function currentSymbology() {
+      return { type: 'layergrabber-symbology', version: 1, name: 'My symbology', note: 'name supports * and ? wildcards; "kind" is polygon, line or point and is used when no name is given.',
+        layers: layers.map(l => { const r = { name: l.name, kind: gkind(l), style: cleanStyle(l.style) }; if ((l.labelFields || []).length) r.labels = { fields: l.labelFields.slice(), style: firstLabelStyle(l) || {} }; return r; }) };
+    }
+    const saveJson = (obj, name) => download(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }), name);
+    const SAMPLE_SYM = { type: 'layergrabber-symbology', version: 1, name: 'Sample symbology',
+      layers: [
+        { name: 'Parcel*', style: { line: '#dc2626', fill: '#dc2626', fillOp: 0.15, weight: 2, dash: 'solid' }, labels: { fields: ['APN'], style: { size: 11, bold: true, color: '#111111' } } },
+        { name: '*road*', kind: 'line', style: { line: '#ea580c', weight: 3, dash: 'dash', lineOp: 1 } },
+        { kind: 'point', style: { shape: 'diamond', size: 12, fill: '#2563eb', line: '#ffffff', fillOp: 0.9, weight: 1.5 } }],
+      default: { polygon: { line: '#334155', fill: '#94a3b8', fillOp: 0.3, weight: 1.5 } } };
+    const SAMPLE_TOOL = '/* Example tool for Layer Grabber. Load it with Load tools > Load file.\n   Your code receives one object, LG. Add as many buttons as you like with LG.addTool(). */\nLG.addTool({\n  name: \'Count features\',\n  title: \'Show how many features the selected layer has\',\n  icon: \'table\',                        // any built-in icon name, or your own <svg>…</svg> text\n  onClick(LG) {\n    const l = LG.activeLayer();\n    if (!l) return LG.toast(\'Click a layer in the Contents list first.\', \'warn\');\n    LG.toast(l.name + \': \' + LG.features(l.id).length + \' features loaded\');\n  }\n});\n\n/* Other things LG can do:\n   LG.layers()  LG.activeLayer()  LG.features(id)  LG.setStyle(id, {line, fill, weight, fillOp, lineOp, dash, shape, size})\n   LG.addGeoJSON(geojson, \'Layer name\')  LG.applySymbology(symbologyObject)  LG.zoomTo(id)\n   LG.map (the Leaflet map)  LG.toast(msg)  LG.download(blob, filename) */\n';
+
+    /* ----- tools (plugins) ----- */
+    const info = l => ({ id: l.id, name: l.name, kind: gkind(l), visible: !!l.visible, editable: !!l.manual, style: Object.assign({}, l.style), fields: (l.fields || []).map(f => f.name) });
+    const LGAPI = {
+      version: 1, map, L, toast, setMsg, download,
+      layers: () => layers.map(info),
+      activeLayer: () => { const l = byId(activeId); return l ? info(l) : null; },
+      features: id => { const l = byId(id); if (!l) return []; return l.manual ? Array.from(l.sel.values()) : (Array.isArray(l.loaded) ? l.loaded : (l.loaded && l.loaded.features) || []); },
+      setStyle: (id, s) => { const l = byId(id); if (!l) throw new Error('No layer with id ' + id); Object.assign(l.style, cleanStyle(s)); restyle(l); renderContents(); },
+      zoomTo: id => { const l = byId(id); return l ? zoomToLayer(l) : undefined; },
+      addGeoJSON: (gj, name) => {
+        const feats = !gj ? [] : gj.type === 'FeatureCollection' ? gj.features : gj.type === 'Feature' ? [gj] : gj.coordinates || gj.geometries ? [{ type: 'Feature', geometry: gj, properties: {} }] : [];
+        const r = window.__lgAddFeatures && window.__lgAddFeatures({ name: name || 'Tool layer', kind: 'GeoJSON', features: feats });
+        if (!r) throw new Error('Nothing to add (no features with geometry).'); renderContents(); return r;
+      },
+      addSymbology: o => { const s = addSymbology(o, 'Tool symbology'); return s.id; },
+      applySymbology: (o, layerId) => { const set = isSym(o) ? { layers: o.layers, default: o.default } : o; return applySet(set, layerId == null ? layers : layers.filter(l => l.id === Number(layerId))); }
+    };
+    function refreshLoadedGrp() { const g = $('#grpLoaded'); g.hidden = !$('#loadedBtns').children.length; }
+    function stopTool(name) { const o = live.get(name); if (o) { o.buttons.forEach(b => b.remove()); live.delete(name); } refreshLoadedGrp(); }
+    function runTool(rec) {
+      stopTool(rec.name); const owner = { buttons: [] }; live.set(rec.name, owner);
+      const api = Object.assign({}, LGAPI, {
+        addTool: d => {
+          if (!d || typeof d.onClick !== 'function') throw new Error('LG.addTool needs {name, onClick}.');
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'tool';
+          const ic = d.icon && ICONS[d.icon] ? ICONS[d.icon] : (typeof d.icon === 'string' && /^\s*<svg/i.test(d.icon) ? d.icon : ICONS.plug);
+          b.innerHTML = ic; b.appendChild(document.createTextNode(String(d.name || 'Tool').slice(0, 40))); b.title = String(d.title || d.name || '');
+          b.addEventListener('click', () => { try { const r = d.onClick(api); if (r && r.catch) r.catch(e => toast('Tool “' + d.name + '”: ' + (e.message || e), 'err')); } catch (e) { toast('Tool “' + d.name + '”: ' + (e.message || e), 'err'); } });
+          $('#loadedBtns').appendChild(b); owner.buttons.push(b); refreshLoadedGrp();
+          return { remove: () => { b.remove(); refreshLoadedGrp(); } };
+        }
+      });
+      try { new Function('LG', '"use strict";\n' + rec.code + '\n//# sourceURL=lgtool-' + encodeURIComponent(rec.name))(api); return null; }
+      catch (e) { stopTool(rec.name); return e; }
+    }
+    async function loadToolFile(f) {
+      const code = await f.text(); if (code.length > 500000) throw new Error('That tool file is too large.');
+      if (!window.confirm('Load the tool “' + f.name + '”?\n\nA tool is a small program that runs inside this page and can read and change your layers. Only load tools from someone you trust.')) return;
+      const rec = { name: f.name, code, on: true }, err = runTool(rec);
+      if (err) { toast('The tool “' + f.name + '” could not start: ' + (err.message || err), 'err'); return; }
+      tools = tools.filter(t => t.name !== rec.name); tools.push(rec); lsSet(LS_TOOLS, tools); renderLoad();
+      toast('Tool “' + f.name + '” loaded. Its button is in the “Loaded tools” group on the toolbar.');
+    }
+
+    /* ----- one entry point for everything the user picks or drops ----- */
+    window.__lgRoute = async files => {
+      const rest = [];
+      for (const f of files) {
+        const n = f.name || '';
+        try {
+          if (/\.js$/i.test(n)) { await loadToolFile(f); continue; }
+          if (/\.json$/i.test(n) && f.size < 2e6) {
+            let o = null; try { o = JSON.parse(await f.text()); } catch (e) { /* not JSON: let the importer report it */ }
+            if (isSym(o)) { loadSymObj(o, n); continue; }
+          }
+        } catch (e) { toast(n + ': ' + (e.message || e), 'err'); continue; }
+        rest.push(f);
+      }
+      return rest;
+    };
+
+    /* ----- the Load window ----- */
+    function renderLoad() {
+      const symRows = symSets.map(s => '<div class="ld-row"><b title="' + esc(s.name) + '">' + esc(s.name) + ' <small>' + (s.layers.length + (s.default ? 1 : 0)) + ' rule' + ((s.layers.length + (s.default ? 1 : 0)) === 1 ? '' : 's') + '</small></b>' +
+        '<button class="btn" data-ld="sym-all" data-id="' + s.id + '" title="Style every layer whose name or type matches a rule">Apply to all</button>' +
+        '<button class="btn" data-ld="sym-one" data-id="' + s.id + '" title="Style only the layer selected in Contents">Apply to selected layer</button>' +
+        '<button class="btn" data-ld="sym-del" data-id="' + s.id + '" title="Remove this symbology from the list">Remove</button></div>').join('') || '<div class="ld-empty">No symbology loaded yet.</div>';
+      const toolRows = tools.map(t => '<div class="ld-row"><b title="' + esc(t.name) + '">' + esc(t.name) + ' <small>' + (live.has(t.name) ? 'running' : 'stopped') + '</small></b>' +
+        '<button class="btn" data-ld="tool-toggle" data-name="' + esc(t.name) + '">' + (live.has(t.name) ? 'Stop' : 'Run') + '</button>' +
+        '<button class="btn" data-ld="tool-del" data-name="' + esc(t.name) + '">Remove</button></div>').join('') || '<div class="ld-empty">No tool loaded yet.</div>';
+      box.innerHTML =
+        '<div class="ld-drop"><button class="btn primary" data-ld="pick">Load file…</button><span class="hint">Choose a <b>symbology</b> (.json), a <b>tool</b> (.js) or a data file (Shapefile .zip, KML, KMZ, GeoJSON, GPX, CSV, WKT). You can also drag files onto the map.</span></div>' +
+        '<div class="ld-h">Symbologies</div>' + symRows +
+        '<div class="ld-acts"><button class="btn" data-ld="sym-save">Save current symbology</button><button class="btn" data-ld="sym-sample">Download sample symbology</button></div>' +
+        '<div class="ld-h">Tools</div>' + toolRows +
+        '<div class="ld-acts"><button class="btn" data-ld="tool-sample">Download sample tool</button></div>' +
+        '<p class="hint">A symbology file styles layers by name (wildcards <code>*</code> and <code>?</code> work) or by type (polygon, line, point). Colors, widths, transparency, line style, point shape and labels are supported, and they carry into the exported PDF.<br><b>Only load tools from people you trust:</b> a tool is a program that runs in this page and can read and change your layers. Loaded symbologies and tools are kept in this browser and come back next time.</p>';
+    }
+    box.addEventListener('click', async e => {
+      const b = e.target.closest('[data-ld]'); if (!b) return; const a = b.dataset.ld;
+      if (a === 'pick') $('#ldFile').click();
+      else if (a === 'sym-all' || a === 'sym-one') {
+        const s = symSets.find(x => x.id === b.dataset.id); if (!s) return;
+        const targets = a === 'sym-all' ? layers : layers.filter(l => l.id === activeId);
+        if (a === 'sym-one' && !targets.length) { toast('Click a layer in the Contents list first.', 'warn'); return; }
+        const n = applySet(s, targets); toast(n ? 'Applied “' + s.name + '” to ' + n + ' layer' + (n === 1 ? '' : 's') + '.' : 'No rule in “' + s.name + '” matches ' + (a === 'sym-all' ? 'any layer' : 'that layer') + '.', n ? '' : 'warn');
+      }
+      else if (a === 'sym-del') { symSets = symSets.filter(x => x.id !== b.dataset.id); lsSet(LS_SYM, symSets); renderLoad(); }
+      else if (a === 'sym-save') { if (!layers.length) { toast('Add a layer first.', 'warn'); return; } saveJson(currentSymbology(), 'symbology.json'); }
+      else if (a === 'sym-sample') saveJson(SAMPLE_SYM, 'sample-symbology.json');
+      else if (a === 'tool-sample') download(new Blob([SAMPLE_TOOL], { type: 'text/javascript' }), 'sample-tool.js');
+      else if (a === 'tool-toggle') {
+        const t = tools.find(x => x.name === b.dataset.name); if (!t) return;
+        if (live.has(t.name)) { stopTool(t.name); t.on = false; } else { const err = runTool(t); if (err) toast('The tool could not start: ' + (err.message || err), 'err'); else t.on = true; }
+        lsSet(LS_TOOLS, tools); renderLoad();
+      }
+      else if (a === 'tool-del') { stopTool(b.dataset.name); tools = tools.filter(x => x.name !== b.dataset.name); lsSet(LS_TOOLS, tools); renderLoad(); }
+    });
+    $('#ldFile').addEventListener('change', async () => {
+      const fs = Array.from($('#ldFile').files || []); $('#ldFile').value = ''; if (!fs.length) return;
+      const rest = await window.__lgRoute(fs); if (rest.length && window.__lgImportFiles) window.__lgImportFiles(rest);
+    });
+    $('#btnLoad').addEventListener('click', () => { renderLoad(); modal.hidden = false; });
+
+    /* tools you loaded earlier start again with the page */
+    tools.forEach(t => { if (t.on !== false) { const err = runTool(t); if (err) toast('Tool “' + t.name + '” could not start: ' + (err.message || err), 'err'); } });
+    renderLoad();
+  })();
 
   loadEdits(); renderContents(); renderTable(); renderSel(); renderPicks(); syncHandUi(); renderAttrPane(); updateTblBar();
 })();
