@@ -445,7 +445,7 @@ html.unlocked #gate{display:none}
 
    SHAPES     Circle, Rectangle, Triangle (press and drag on the map)
    ALIGNMENT  Move, Move To, Rotate, Scale, Transform, Align Features, Align Edge, Rubbersheet
-   RESHAPE    Edit Vertices, Reshape, Replace Geometry, Continue Feature, Extend or Trim, Fillet, Generalize, Smooth
+   RESHAPE    Edit Vertices, Delete Vertices, Reshape, Replace Geometry, Continue Feature, Extend or Trim, Fillet, Generalize, Smooth
    DIVIDE     Split, Explode, Clip, Planarize, Construct Polygons
    CONSTRUCT  Merge, Buffer, Duplicate Vertical, Offset, Mirror, Copy Parallel, Create Radial, Create Regular Polygon
 
@@ -662,11 +662,8 @@ html.unlocked #gate{display:none}
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const toC = ll => [ll.lng, ll.lat], toLL = c => L.latLng(c[1], c[0]);
   const css = el('style'); css.textContent = `
-#lgxPanel{position:fixed;top:150px;right:14px;width:322px;max-height:calc(100vh - 170px);overflow:auto;background:var(--panel,#fff);border:1px solid var(--line,#ccc);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.28);z-index:4500;font-size:12.5px;color:var(--ink,#14222d)}
-#lgxPanel .hd{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--ink,#14222d);color:#fff;cursor:move;border-radius:8px 8px 0 0;position:sticky;top:0;z-index:2;user-select:none}
-#lgxPanel .hd b{flex:1}#lgxPanel .hd button{background:none;border:0;color:#fff;font-size:17px;cursor:pointer;line-height:1}
 #lgxSel{padding:6px 10px;border-bottom:1px solid var(--line,#ddd);color:var(--muted,#5b6d79);font-size:12px}
-#lgxPanel details{border-bottom:1px solid var(--line,#ddd)}#lgxPanel summary{padding:6px 10px;font-weight:650;cursor:pointer;background:#eef2ef}
+#lgxPanel details{border-bottom:1px solid var(--line,#ddd)}#lgxPanel summary{padding:6px 10px;font-weight:650;cursor:pointer;background:#eef2ef;position:sticky;top:0;z-index:1}
 .lgx-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:6px}
 .lgx-b{border:1px solid var(--line,#ccc);background:#fff;border-radius:5px;padding:5px 6px;text-align:left;font-size:12px;display:flex;gap:6px;align-items:center;cursor:pointer;color:inherit}
 .lgx-b.on{background:#0f766e;color:#fff}.lgx-b.on i{color:#fff}
@@ -730,12 +727,15 @@ html.unlocked #gate{display:none}
     return new Promise(resolve => {
       const cont = map.getContainer(), ov = el('div', 'lgx-ov'), pv = L.layerGroup().addTo(map); cont.appendChild(ov); hint(msg);
       let down = null, lastTap = 0, lastPt = null;
-      const fin = v => { ov.remove(); pv.remove(); document.removeEventListener('keydown', onKey, true); cur = null; hint(null); resolve(v); };
-      const llOf = e => map.mouseEventToLatLng(e);
+      const fin = v => { ov.remove(); pv.remove(); document.removeEventListener('keydown', onKey, true); cur = null; hint(null); if (LG.snap) LG.snap.hide(); resolve(v); };
+      const llOf = e => {                                  // the pointer position, locked onto the nearest snap target
+        const raw = map.mouseEventToLatLng(e); if (!LG.snap || h.snap === false) return raw;
+        return LG.snap.at(raw, { from: h.from ? h.from() : null, extra: h.extra ? h.extra() : null });
+      };
       ov.addEventListener('pointerdown', e => { if (e.button) return; down = { x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, moved: false }; try { ov.setPointerCapture(e.pointerId); } catch (x) { /* ok */ } });
       ov.addEventListener('pointermove', e => {
         if (down) { if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) down.moved = true; if (down.moved) { map.panBy([-(e.clientX - down.px), -(e.clientY - down.py)], { animate: false }); } down.px = e.clientX; down.py = e.clientY; }
-        else if (h.move) h.move(llOf(e), pv);
+        else { const q = llOf(e); if (h.move) h.move(q, pv); }
       });
       ov.addEventListener('pointerup', e => {
         if (!down) return; const d = down; down = null; if (d.moved) return;
@@ -756,7 +756,7 @@ html.unlocked #gate{display:none}
   const pStyle = { color: '#0f766e', weight: 2, dashArray: '5 4', interactive: false };
   function pickPoint(msg, o) {
     if (window.__LGX_PICK) return Promise.resolve(window.__LGX_PICK('point', msg));
-    return interact(msg, { click: (ll, f) => f(ll), enter: o && o.allowDone ? f => f('done') : null });
+    return interact(msg, { click: (ll, f) => f(ll), enter: o && o.allowDone ? f => f('done') : null, snap: o && o.snap, from: o && o.from });
   }
   function pickPath(msg, o) {
     o = o || {}; if (window.__LGX_PICK) return Promise.resolve(window.__LGX_PICK(o.kind || 'line', msg));
@@ -769,7 +769,8 @@ html.unlocked #gate{display:none}
     const done = f => { if (pts.length < min) { T('Add at least ' + min + ' points first.', 'warn'); return; } f(pts.map(toC)); };
     return interact(msg, {
       click: (ll, f, pv) => { pts.push(ll); if (o.max && pts.length >= o.max) f(pts.map(toC)); else draw(pv, null); },
-      move: (ll, pv) => draw(pv, ll), enter: done, dbl: done,
+      move: (ll, pv) => draw(pv, ll), enter: done, dbl: done, snap: o.snap,
+      from: () => pts.length ? pts[pts.length - 1] : null, extra: () => pts.length > 1 ? [{ type: 'LineString', coordinates: pts.map(toC) }] : null,
       back: pv => { if (pts.length > (o.prefix ? o.prefix.length : 0)) { pts.pop(); draw(pv, null); } }
     });
   }
@@ -896,7 +897,7 @@ html.unlocked #gate{display:none}
 
   function mark() { document.querySelectorAll('#lgxPanel .lgx-b[data-shape]').forEach(b => b.classList.toggle('on', b.dataset.shape === active)); }
 
-  const toLL = ev => map.mouseEventToLatLng(ev);
+  const toLL = ev => { const raw = map.mouseEventToLatLng(ev); return LG.snap ? LG.snap.at(raw, {}) : raw; };    // snapped, with the pink marker
   function onDown(ev) {
     if (!active || (ev.button != null && ev.button !== 0)) return;
     if (ev.target.closest && ev.target.closest('.leaflet-control, .leaflet-popup')) return;
@@ -905,7 +906,7 @@ html.unlocked #gate{display:none}
     try { cont.setPointerCapture(ev.pointerId); } catch (e) { /* not needed on all browsers */ }
   }
   function onMove(ev) {
-    if (!session) return; ev.preventDefault();
+    if (!session) { if (active && !(ev.target.closest && ev.target.closest('.leaflet-control, .leaflet-popup'))) toLL(ev); return; } ev.preventDefault();
     const b = toLL(ev), sh = shapePoints(session.kind, session.a, b); session.moved = true; session.last = b;
     if (session.prev) map.removeLayer(session.prev);
     session.prev = L.polygon(sh.pts, { color: STYLE[session.kind], weight: 2, dashArray: '5 4', fillOpacity: 0.15, interactive: false }).addTo(map);
@@ -913,7 +914,7 @@ html.unlocked #gate{display:none}
   }
   function onUp(ev) {
     if (!session) return; ev.preventDefault(); ev.stopPropagation();
-    const s = session; session = null; if (s.prev) map.removeLayer(s.prev);
+    const s = session; session = null; if (s.prev) map.removeLayer(s.prev); if (LG.snap) LG.snap.hide();
     const b = s.last || toLL(ev), sh = shapePoints(s.kind, s.a, b);
     if (!s.moved || s.a.distanceTo(b) < 0.5) { LG.toast('Press and drag to size the ' + s.kind.toLowerCase() + '.', 'warn'); return; }
     try { saveShape(s.kind, sh); LG.toast(s.kind + ' added to the layer “' + LAYER[s.kind] + '”. Draw another, or press Esc to stop.'); }
@@ -929,6 +930,7 @@ html.unlocked #gate{display:none}
   }
   function stop() {
     if (session && session.prev) map.removeLayer(session.prev); session = null;
+    if (LG.snap) LG.snap.hide();
     if (!active) return; active = null; mark();
     map.dragging.enable(); cont.style.cursor = ''; cont.style.touchAction = '';
   }
@@ -1029,6 +1031,15 @@ html.unlocked #gate{display:none}
     if (c.items.length > 1) { T('Select only one feature to edit its vertices.', 'warn'); return; }
     const b = document.getElementById('btnVertex'); if (b) b.click();
     T('Edit Vertices: drag a dot to move a corner, drag a pale middle dot to add one, right-click or double-click a dot to delete it. Press Pan to finish.');
+  }
+  function tDelVerts() {
+    const V = window.__lgVtx;
+    if (V && V.count()) { V.deleteSelected(); return; }
+    const c = LG.picked(); if (!c || !c.items.length) { T('Select one line or polygon first, then press Delete Vertices.', 'warn'); return; }
+    if (!c.editable) { T('“' + c.name + '” is read-only. Use Copy to editable first.', 'warn'); return; }
+    if (c.items.length > 1 || c.kind === 'point') { T('Select a single line or polygon to delete some of its vertices.', 'warn'); return; }
+    const b = document.getElementById('btnVertex'); if (b && !b.classList.contains('on')) b.click();
+    T('Delete Vertices: click the vertex dots you want to remove (they turn red), then press Delete selected in the bar on the map, or this button again. Right-click a dot deletes just that one.');
   }
   async function tReshape() {
     const c = need({ kinds: ['polygon', 'line'], max: 1 }); if (!c) return; const g = c.items[0].feature.geometry;
@@ -1137,7 +1148,7 @@ html.unlocked #gate{display:none}
     const v = await ask('Clip', [{ k: 'w', label: 'Clip with', type: 'select', options: ['A polygon I click on the map', 'A polygon I sketch'] }, { k: 'k', label: 'Keep', type: 'select', options: ['The part inside the clip polygon', 'The part outside the clip polygon (erase)'] }]); if (!v) return;
     let clip = null;
     if (v.w.startsWith('A polygon I click')) {
-      const ll = await pickPoint('Click inside the polygon to clip with.'); if (!ll) return; const skip = skipPicked(c);
+      const ll = await pickPoint('Click inside the polygon to clip with.', { snap: false }); if (!ll) return; const skip = skipPicked(c);
       LG.layers().slice().reverse().some(l => l.visible && LG.features(l.id).some(f => { if (!f || !f.geometry || skip(l, f)) return false; const p = parts(f.geometry).find(x => x.type === 'Polygon' && pip(toC(ll), x)); if (p) { clip = p; return true; } return false; }));
       if (!clip) { T('No polygon was found under that click.', 'warn'); return; }
     } else { const p = await pickPath('Sketch the clip polygon. Double-click or Enter to finish.', { min: 3, kind: 'polygon' }); if (!p) return; clip = { type: 'Polygon', coordinates: [closeRing(p)] }; }
@@ -1242,34 +1253,38 @@ html.unlocked #gate{display:none}
   const GROUPS = [
     ['Create Shapes', [['Circle', '◯', 'Press at the center and drag outward to draw a circle', null, 1], ['Rectangle', '▭', 'Press and drag from corner to corner', null, 1], ['Triangle', '△', 'Press and drag a box; the triangle fills it', null, 1]]],
     ['Alignment', [['Move', '✥', 'Shift the selected features by an east–west and north–south distance', tMove], ['Move To', '⌖', 'Move the selection so its center (or first vertex) lands on a location', tMoveTo], ['Rotate', '⟳', 'Rotate the selection by an angle about a pivot', tRotate], ['Scale', '⤢', 'Make the selection bigger or smaller about a pivot', tScale], ['Transform', '◇', 'Scale, rotate and move in one step', tTransform], ['Align Features', '☰', 'Line up several features (left, right, top, bottom, centers) or space them evenly', tAlignFeatures], ['Align Edge', '⊢', 'Rotate and shift the selection so one of its edges lies along a reference edge', tAlignEdge], ['Rubbersheet', '≋', 'Stretch the selection with links: “this point should go there”', tRubber]]],
-    ['Reshape', [['Edit Vertices', '◦', 'Drag, add and delete the corners of the selected feature', tVertices], ['Reshape', '∿', 'Sketch a new edge that replaces part of a line or polygon outline', tReshape], ['Replace Geometry', '⇄', 'Draw a new shape for the selected feature and keep its attributes', tReplace], ['Continue Feature', '⇢', 'Add more vertices onto the end of a line', tContinue], ['Extend or Trim', '⊣', 'Extend a line to a boundary, or trim it back at the boundary', tExtendTrim], ['Fillet', '◜', 'Round off sharp corners with a radius', tFillet], ['Generalize', '⋰', 'Remove unneeded vertices (Douglas–Peucker)', tGeneralize], ['Smooth', '∼', 'Smooth jagged lines and outlines', tSmooth]]],
+    ['Reshape', [['Edit Vertices', '◦', 'Drag, add and delete the corners of the selected feature', tVertices], ['Delete Vertices', '✕', 'Click several vertex dots to select them, then delete them all together', tDelVerts], ['Reshape', '∿', 'Sketch a new edge that replaces part of a line or polygon outline', tReshape], ['Replace Geometry', '⇄', 'Draw a new shape for the selected feature and keep its attributes', tReplace], ['Continue Feature', '⇢', 'Add more vertices onto the end of a line', tContinue], ['Extend or Trim', '⊣', 'Extend a line to a boundary, or trim it back at the boundary', tExtendTrim], ['Fillet', '◜', 'Round off sharp corners with a radius', tFillet], ['Generalize', '⋰', 'Remove unneeded vertices (Douglas–Peucker)', tGeneralize], ['Smooth', '∼', 'Smooth jagged lines and outlines', tSmooth]]],
     ['Divide', [['Split', '✂', 'Cut a polygon with a drawn line, or a line at a clicked point', tSplit], ['Explode', '✺', 'Break features into edges, boundary lines, vertex points or single parts', tExplode], ['Clip', '▣', 'Cut the selection with a polygon (keep inside or outside)', tClip], ['Planarize', '⌗', 'Split lines at every place they cross or touch', tPlanarize], ['Construct Polygons', '⬡', 'Build polygons from closed rings of lines', tConstruct]]],
     ['Construct', [['Merge', '⊕', 'Join the selected polygons (or lines) into one feature', tMerge], ['Buffer', '◎', 'Make polygons around features at a distance', tBuffer], ['Duplicate Vertical', '⇈', 'Stack copies of the selection above (or below) it', tDupVertical], ['Offset', '⇉', 'Add a copy of a line or polygon outline at a set distance', tOffset], ['Mirror', '⇋', 'Flip the selection across a line', tMirror], ['Copy Parallel', '∥', 'Add several parallel copies of lines or outlines', tParallel], ['Create Radial', '✳', 'Create lines that spread out from a point like spokes', tRadial], ['Create Regular Polygon', '⬠', 'Create a triangle, square, hexagon… from a center and radius', tRegular]]]
   ];
   GROUPS[0][1].forEach(t => { t[3] = () => SHAPES.start(t[0]); });
   window.__lgxTools = {}; GROUPS.forEach(g => g[1].forEach(t => { window.__lgxTools[t[0]] = t[3]; }));
-  let panel = null;
+  let panel = null, P = null;
   function selText() { const c = LG.picked(); return c && c.items.length ? '<b>' + c.items.length + '</b> ' + c.kind + (c.items.length === 1 ? '' : 's') + ' selected in “' + esc(c.name) + '”' + (c.editable ? '' : ' <i>(read-only – results go to a new layer)</i>') : 'Nothing selected. Use <b>Select</b> on the ribbon, click a feature (Shift adds more), then pick a tool.'; }
+  function markBtn() { const b = Array.from(document.querySelectorAll('#loadedBtns .tool')).find(x => x.textContent.trim() === 'Edit tools'); if (b) b.classList.toggle('on', !!(P && P.isOpen())); }
   function buildPanel() {
-    panel = el('div'); panel.id = 'lgxPanel';
-    const hd = el('div', 'hd', '<b>Edit tools</b><span style="opacity:.75;font-size:11px">Ctrl+Z undoes</span><button type="button" title="Close">×</button>'); panel.appendChild(hd);
-    hd.querySelector('button').onclick = () => togglePanel(false);
-    const sel = el('div'); sel.id = 'lgxSel'; panel.appendChild(sel);
+    /* LG.panel gives a window that always fits the screen: fixed header, scrolling body, drag, resize from the corner, collapse */
+    P = LG.panel({ id: 'edit-tools', title: 'Edit tools', subtitle: 'Ctrl+Z undoes', width: 340, onToggle: markBtn });
+    panel = P.el; panel.id = 'lgxPanel';
+    const bd = P.body, sel = el('div'); sel.id = 'lgxSel'; bd.appendChild(sel);
+    if (LG.snap && LG.snap.mountUI) {
+      const d = el('details'); d.open = true; d.appendChild(el('summary', null, 'Snapping <span style="font-weight:400;color:#5b6d79">(drawing and every tool below)</span>'));
+      LG.snap.mountUI(d); bd.appendChild(d);
+    }
     GROUPS.forEach((g, gi) => {
       const d = el('details'); d.open = gi <= 1; d.appendChild(el('summary', null, g[0] + ' <span style="font-weight:400;color:#5b6d79">(' + g[1].length + ')</span>')); const grid = el('div', 'lgx-grid');
       g[1].forEach(t => { const b = el('button', 'lgx-b', '<i>' + t[1] + '</i><span>' + esc(t[0]) + '</span>'); b.type = 'button'; b.title = t[2]; if (t[4]) b.dataset.shape = t[0]; b.onclick = async () => { cancelInteract(); const was = SHAPES.active; SHAPES.stop(); if (t[4] && was === t[0]) return; try { await t[3](); } catch (e) { hint(null); T(t[0] + ': ' + (e && e.message ? e.message : e), 'err'); } finally { upd(); } }; grid.appendChild(b); });
-      d.appendChild(grid); panel.appendChild(d);
+      d.appendChild(grid); bd.appendChild(d);
     });
-    document.body.appendChild(panel);
-    let drag = null; hd.addEventListener('pointerdown', e => { if (e.target.tagName === 'BUTTON') return; const r = panel.getBoundingClientRect(); drag = { dx: e.clientX - r.left, dy: e.clientY - r.top }; hd.setPointerCapture(e.pointerId); });
-    hd.addEventListener('pointermove', e => { if (!drag) return; panel.style.left = Math.max(0, e.clientX - drag.dx) + 'px'; panel.style.top = Math.max(0, e.clientY - drag.dy) + 'px'; panel.style.right = 'auto'; });
-    hd.addEventListener('pointerup', () => { drag = null; });
     upd();
   }
   function upd() { const s = document.getElementById('lgxSel'); if (s) s.innerHTML = selText(); }
-  const timer = setInterval(() => { if (panel && panel.isConnected) upd(); }, 900);
-  function togglePanel(on) { if (!panel) buildPanel(); panel.style.display = (on === undefined ? panel.style.display === 'none' : on) ? '' : 'none'; if (panel.style.display !== 'none') upd(); const b = Array.from(document.querySelectorAll('#loadedBtns .tool')).find(x => x.textContent.trim() === 'Edit tools'); if (b) b.classList.toggle('on', panel.style.display !== 'none'); }
-  LG.addTool({ name: 'Edit tools', icon: 'edit', title: 'Open the panel with 32 tools: shapes plus 29 editing tools: align, reshape, divide and construct', onClick() { togglePanel(); } });
+  LG.on('select', upd); LG.on('edit', upd);
+  const timer = setInterval(() => { if (panel && panel.isConnected && P.isOpen()) upd(); }, 1500);
+  function togglePanel(on) { if (!P) buildPanel(); P.toggle(on); upd(); markBtn(); }
+  // share the dialog and the map pickers so any tool file loaded later can use them (LG.ui.ask, LG.ui.pickPoint, LG.ui.pickPath)
+  LG.provide('ui', { ask, pickPoint, pickPath, hint, cancel: cancelInteract });
+  LG.addTool({ name: 'Edit tools', icon: 'edit', title: 'Open the panel with snapping and 32 tools: shapes plus 29 editing tools: align, reshape, divide and construct', onClick() { togglePanel(); } });
   if (!window.__LGX_BUILTIN) setTimeout(() => togglePanel(true), 50);
 })();
 
@@ -1358,6 +1373,9 @@ html.unlocked #gate{display:none}
       <button class="tool dl" id="btnHandDl" data-icon="down">Download drawn</button>
       <button class="tool" id="btnHandClear" data-icon="clear" title="Delete every feature on the active editable layer">Clear layer</button>
     </div><div class="grp-cap">Editable layer</div></div>
+    <div class="grp"><div class="grp-btns">
+      <button class="tool on" id="btnSnap" data-icon="snap" title="Snapping settings: Point, End, Vertex, Intersection, Midpoint, Center, Perpendicular, Tangent, Edge. Works while you draw, edit vertices, move features and use the Edit tools. Hold Alt to snap off for one click.">Snapping</button>
+    </div><div class="grp-cap">Snap</div></div>
     <div class="grp"><div class="grp-btns">
       <button class="tool" id="btnDrawPoly" data-tool="polygon" data-icon="poly" title="Click each corner; double-click or Enter to finish">Polygon</button>
       <button class="tool" id="btnDrawLine" data-tool="line" data-icon="line" title="Click each vertex; double-click or Enter to finish">Line</button>
@@ -1509,7 +1527,7 @@ html.unlocked #gate{display:none}
   <div class="modal" style="width:min(640px,100%)" role="dialog" aria-modal="true" aria-labelledby="ldTitleH">
     <div class="modal-head"><h2 id="ldTitleH">Load symbologies and tools</h2><button class="x" data-close aria-label="Close">×</button></div>
     <div class="modal-body" id="ldBody"></div>
-    <input type="file" id="ldFile" multiple hidden accept=".js,.json,.qml,.sld,.xml,.lyrx,.lyr,.esrijson,.geojson,.zip,.kmz,.kml,.gpx,.csv,.tsv,.txt,.wkt,.shp,.dbf,.prj,.cpg,.shx">
+    <input type="file" id="ldFile" multiple hidden accept=".js,.json,.mjs,.qml,.sld,.xml,.lyrx,.lyr,.esrijson,.geojson,.zip,.kmz,.kml,.gpx,.csv,.tsv,.txt,.wkt,.shp,.dbf,.prj,.cpg,.shx">
     <div class="modal-foot"><button class="btn" data-close>Close</button></div>
   </div>
 </div>
@@ -1584,6 +1602,7 @@ html.unlocked #gate{display:none}
         <li>Use <b>Definition query</b> on the layer card to filter, for example <code>municipality = 'OAK PARK'</code>. The <b>Attribute table</b> lists what is loaded in the current view.</li>
         <li>Press <b>Download</b>. Choose the file format (Shapefile, KML, KMZ or GeoJSON), then the map view, a box you drew, or the entire layer, then press <b>Download</b>. Tick “Download every matching feature” to remove the size limit entirely and fetch everything that matches, however many features that is — for a county-wide parcel layer this can be a large file and take a while, since ArcGIS servers only return a few thousand features per request.</li>
         <li><b>Editable layers (draw your own parcels, lines and points):</b> press <b>New layer</b> to choose Polygon, Line or Point and set its attribute fields, or just pick a tool in <b>Draw</b> and a layer is created for you. Polygon/Line: click each corner, then double-click (or press Enter) to finish; corners snap to nearby ones. Point: click once. Tick “Ask for fields after drawing” to fill in the attributes straight away.</li>
+        <li><b>Snapping:</b> press <b>Snapping</b> on the ribbon to choose what the cursor locks onto, like ArcGIS: <b>Point, End, Vertex, Intersection, Midpoint, Center, Perpendicular, Tangent</b> and <b>Edge</b>. A pink marker names the snap while you draw, drag vertices, move features and use any Edit tool (circles, rectangles, Move To, Rotate, Mirror…). Perpendicular and Tangent work from the previous point. Hold <b>Alt</b> to snap off for one click. The same switches are inside the Edit tools panel.</li>
         <li><b>Measure:</b> in the <b>Measure</b> group choose <b>Distance</b> (length, azimuth and bearing of every segment), <b>Area</b> (area and perimeter), <b>Radius</b> (radius, diameter, circumference, area), <b>Coordinates</b> (decimal degrees, DMS, UTM, Web Mercator) or <b>Selected</b> (totals and per-feature area, perimeter or length of the selected features). Click points on the map; double-click or Enter finishes, Backspace removes the last point, Esc clears. Pick your length and area units (feet, meters, miles, acres, hectares, guntas, cents, gaj and more) in the panel; every unit is also listed. <b>Copy results</b> puts the numbers on the clipboard and <b>Save as feature…</b> adds the shape to an editable layer.</li>
         <li><b>Copy &amp; paste:</b> select features, then press <b>Ctrl+C</b> (or the Copy button). <b>Ctrl+V</b> pastes into the active editable layer of the same type (a new layer is made if there is none). <b>Ctrl+Shift+V</b> (or <b>Paste to…</b>) lets you choose an existing layer or a new one. Online layers can be copied too, then edited once pasted.</li>
         <li><b>Select &amp; edit:</b> <b>Select</b> clicks a feature (Shift adds) or drags a box; <b>Move</b> drags features; <b>Vertices</b> lets you drag a feature’s dots, drag a pale middle dot to add a corner, and right-click a dot to delete it; <b>Attributes</b> jumps to the Attributes pane on the right, which edits one feature or all selected features at once (pick “All N features” in its list; fields showing ‹multiple values› differ, and only fields you change are updated); <b>Delete</b>, <b>Undo</b> (Ctrl+Z) and <b>Redo</b> (Ctrl+Y) work as you’d expect. In the attribute table, click a row to select it and double-click a cell to edit it. <b>Edit fields</b> adds, renames or removes attribute fields. Area, length and coordinates are filled in automatically.</li>
@@ -1591,7 +1610,7 @@ html.unlocked #gate{display:none}
         <li><b>Street View:</b> press <b>Street View</b> on the ribbon, then click a road on the map. The screen splits and Google Street View opens on the right, with a Google-style blue dot and view cone on the map showing where you are and which way you face. Drag that dot along the road to move Street View with it (it snaps to the nearest road), or click elsewhere to jump, drag the grey bar between the two halves to resize, and press ✕ to close. Paste a Google Maps API key (Maps JavaScript API) into the ribbon box for the full interactive view where the marker follows you as you move along the road; without a key a basic embedded view is used. The key is kept only in this browser.</li>
         <li><b>Edit tools (built-in):</b> press <b>Edit tools</b> in the “Loaded tools” group to open the panel. <b>Create Shapes</b> draws circles, rectangles and triangles. <b>Alignment, Reshape, Divide</b> and <b>Construct</b> hold 29 ArcGIS-style editing tools. Select features with <b>Select</b> first; Ctrl+Z undoes an edit. Split, Clip, Merge, Buffer, Construct Polygons and polygon Offset load a geometry library from the internet the first time they are used.</li>
         <li><b>Import symbology from other programs:</b> open <b>Load tools</b> and press <b>Import symbology file…</b> (or drop the file on the map) to bring in a QGIS <b>.qml</b>, an <b>SLD</b>, an ArcGIS Pro <b>.lyrx</b>, an ArcGIS layer / web-map <b>.json</b> or a Mapbox / MapLibre style. You can also paste an ArcGIS layer address to read its colours from the server. Each layer carries one symbol here, so unique-value, graduated and rule-based renderers use their first class. Files with layer names are applied to matching layers; a QGIS .qml has no layer name, so it is applied to the layer selected in Contents.</li>
-        <li><b>Load tools:</b> press <b>Load tools</b> and then <b>Load file…</b> to pick a file. A <b>symbology</b> file (.json) styles your layers by name or type (colors, widths, transparency, line style, point shape, labels) and is kept in the browser so you can apply it again later; use <b>Save current symbology</b> to make one from the styles you have set. A <b>tool</b> file (.js) adds its own buttons to a “Loaded tools” group on the toolbar. Download the sample files in that window to see the format. Only load tools from people you trust.</li>
+        <li><b>Load tools:</b> press <b>Load tools</b> and then <b>Load file…</b> to pick a file. A <b>symbology</b> file (.json) styles your layers by name or type (colors, widths, transparency, line style, point shape, labels) and is kept in the browser so you can apply it again later; use <b>Save current symbology</b> to make one from the styles you have set. A <b>tool</b> file (.js; pick several at once, drop them on the map or paste an address) adds its own buttons to a “Loaded tools” group on the toolbar. Download the sample files in that window to see the format. Only load tools from people you trust.</li>
         <li><b>Import file:</b> press <b>Import file</b> in the Import group (or drag files onto the map) to load a Shapefile (a .zip, or select the .shp + .dbf + .prj together), KML, KMZ, GeoJSON / Esri JSON, GPX, CSV/TSV with latitude/longitude columns or a WKT column, or a .wkt file. Several files can be picked at once. Projected shapefiles are converted to lat/lon using their .prj. Each import becomes an editable layer (separate layers for polygons, lines and points when a file mixes them), so you can edit it and download it again in any format. File Geodatabases (.gdb), GeoPackage, DWG/DXF are not supported – convert them to Shapefile or GeoJSON first.</li>
         <li><b>Download several layers at once:</b> open any Download dialog and tick more layers under “Also download these layers”. They are saved together in one .zip (all files together in a single folder, no sub-folders per layer). Hand-drawn and imported layers are saved in full; service layers use the area you choose, falling back to the current map view if nothing is traced or selected on them.</li>
         <li>Shapefiles come as a .zip. Unzip it before opening in ArcGIS or QGIS. Shapefile field names are cut to 10 characters, so a <code>_field_names.txt</code> file lists the original names.</li>
@@ -2137,6 +2156,7 @@ const GGCore = (function () {
     paste: '<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="1.5"/><path d="M9 5V3.5h6V5M9 11h6M9 15h6"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></svg>',
     trace: '<svg viewBox="0 0 24 24"><path d="M4 18c3-8 6 2 9-5s4-5 7-9"/><circle cx="4" cy="18" r="1.6"/></svg>',
+    snap: '<svg viewBox="0 0 24 24"><path d="M6 3v8a6 6 0 0 0 12 0V3h-4v8a2 2 0 0 1-4 0V3z"/><path d="M6 7h4M14 7h4"/></svg>',
     plug: '<svg viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0zM12 18v3"/></svg>'
   };
   $$('[data-icon]').forEach(b => { b.insertAdjacentHTML('afterbegin', ICONS[b.dataset.icon] || ''); });
@@ -2262,11 +2282,11 @@ const GGCore = (function () {
   }
 
   /* ---------- map ---------- */
-  const map = L.map('map', { preferCanvas: true, center: [41.84, -87.68], zoom: 10, maxZoom: 21, zoomControl: true });
+  const map = L.map('map', { preferCanvas: true, center: [41.84, -87.68], zoom: 10, maxZoom: 26, zoomControl: true });
   L.control.scale({ imperial: true, metric: true, position: 'bottomleft' }).addTo(map);
   const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
   const esriAttr = 'Tiles © Esri, Maxar, Earthstar Geographics, and the GIS User Community';
-  const esriTile = (svc, nz) => L.tileLayer(ESRI + svc + '/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: nz || 19, maxZoom: 21, attribution: esriAttr });
+  const esriTile = (svc, nz) => L.tileLayer(ESRI + svc + '/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: nz || 19, maxZoom: 26, attribution: esriAttr });
   const BASEMAPS = {
     'Esri Streets': () => esriTile('World_Street_Map'),
     'Esri Imagery': () => esriTile('World_Imagery'),
@@ -2274,11 +2294,11 @@ const GGCore = (function () {
     'Esri Topographic': () => esriTile('World_Topo_Map'),
     'Light gray canvas': () => esriTile('Canvas/World_Light_Gray_Base', 16),
     'Dark gray canvas': () => esriTile('Canvas/World_Dark_Gray_Base', 16),
-    'Google Roadmap': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 21, attribution: 'Map data © Google' }),
-    'Google Satellite': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 21, attribution: 'Imagery © Google' }),
-    'Google Hybrid': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 21, attribution: 'Map data © Google' }),
-    'Google Terrain': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 21, attribution: 'Map data © Google' }),
-    'OpenStreetMap': () => L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, maxZoom: 21, attribution: '© OpenStreetMap contributors' })
+    'Google Roadmap': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 26, attribution: 'Map data © Google' }),
+    'Google Satellite': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 26, attribution: 'Imagery © Google' }),
+    'Google Hybrid': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 26, attribution: 'Map data © Google' }),
+    'Google Terrain': () => L.tileLayer('https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', { subdomains: '0123', maxNativeZoom: 20, maxZoom: 26, attribution: 'Map data © Google' }),
+    'OpenStreetMap': () => L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, maxZoom: 26, attribution: '© OpenStreetMap contributors' })
   };
   let baseLayer = null;
   const bsel = $('#basemapSel');
@@ -2649,6 +2669,7 @@ const GGCore = (function () {
     renderContents(); syncHandUi(); buildHandles();
     if (lyr.id === activeId) renderTable();
     renderAttrPane(); updateTblBar();
+    lgEmit('edit', { layerId: lyr.id });
     scheduleSave();
   }
   function newFeature(lyr, g) {
@@ -2718,6 +2739,7 @@ const GGCore = (function () {
     updateTblBar(); renderAttrPane();
   }
   function afterPick(lyr) {
+    lgEmit('select', { layerId: lyr.id });
     layers.forEach(l => { if (!l.manual && l.pcache) l.pcache.forEach((f, k) => { if (!l.picked.has(k)) l.pcache.delete(k); }); });
     if (lyr && lyr.id !== activeId) setActive(lyr.id);
     renderPicks(); buildHandles(); syncHandUi(); refreshTableSel();
@@ -2729,7 +2751,7 @@ const GGCore = (function () {
     keys.forEach(k => { if (mode === 'toggle' && lyr.picked.has(k)) lyr.picked.delete(k); else lyr.picked.add(k); });
     afterPick(lyr);
   }
-  function clearPicks() { layers.forEach(l => { if (l.picked) l.picked.clear(); }); renderPicks(); buildHandles(); syncHandUi(); refreshTableSel(); }
+  function clearPicks() { layers.forEach(l => { if (l.picked) l.picked.clear(); }); renderPicks(); buildHandles(); syncHandUi(); refreshTableSel(); lgEmit('select', null); }
   function deletePicked() {
     const lyr = pickedLayer(); if (!lyr) return;
     if (!lyr.manual) { toast('Features from a service layer are read-only, so they can’t be deleted. Only your own drawn layers can be edited.', 'warn'); return; }
@@ -2755,20 +2777,74 @@ const GGCore = (function () {
     if (set.closed && i === 0) set.coords[set.coords.length - 1] = set.coords[0].slice();
     updateAuto(lyr, f); syncManual(lyr);
   }
+  /* ----- select several vertices and delete them together ----- */
+  let vSel = new Set(), vFeat = null, vDragT = 0, vBar = null;
+  (function () { const st = document.createElement('style'); st.textContent = '.vh.vsel{background:#dc2626;border-color:#7f1d1d}#vtxBar{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 90px);background:#fff;border:1px solid #cbd5d1;border-radius:8px;padding:5px 8px;box-shadow:0 3px 12px rgba(0,0,0,.25);font-size:12.5px}#vtxBar button{border:1px solid #cbd5d1;background:#fff;border-radius:5px;padding:4px 9px;cursor:pointer;font:inherit}#vtxBar button.dng{background:#dc2626;border-color:#dc2626;color:#fff}#vtxBar button:disabled{opacity:.45;cursor:default}'; document.head.appendChild(st); })();
+  function vtxState() {
+    const lyr = pickedLayer(); if (!lyr || !lyr.manual || lyr.picked.size !== 1) return null;
+    const f = lyr.sel.get(Array.from(lyr.picked)[0]); return f && f.geometry && f.geometry.type !== 'Point' ? { lyr, f } : null;
+  }
+  function updateVtxBar() {
+    const st = eTool === 'vertex' ? vtxState() : null;
+    if (!st) { if (vBar) vBar.hidden = true; return; }
+    if (!vBar) {
+      vBar = document.createElement('div'); vBar.id = 'vtxBar';
+      vBar.innerHTML = '<span data-n></span><button type="button" data-a="all">Select all</button><button type="button" data-a="clear">Clear</button><button type="button" class="dng" data-a="del">Delete selected</button>';
+      map.getContainer().appendChild(vBar); L.DomEvent.disableClickPropagation(vBar); L.DomEvent.disableScrollPropagation(vBar);
+      vBar.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b) return; if (b.dataset.a === 'del') deleteSelectedVertices(); else if (b.dataset.a === 'all') selectAllVertices(); else { vSel.clear(); buildHandles(); } });
+    }
+    vBar.hidden = false;
+    vBar.querySelector('[data-n]').textContent = vSel.size ? vSel.size + ' vertices selected' : 'Click vertex dots to select them (they turn red)';
+    vBar.querySelector('[data-a=del]').disabled = !vSel.size; vBar.querySelector('[data-a=clear]').disabled = !vSel.size;
+  }
+  function selectAllVertices() {
+    const st = vtxState(); if (!st) { toast('Select one editable line or polygon first.', 'warn'); return; }
+    vertexSets(st.f).forEach((set, si) => { if (set.point) return; const n = set.closed ? set.coords.length - 1 : set.coords.length; for (let i = 0; i < n; i++) vSel.add(si + ':' + i); });
+    buildHandles();
+  }
+  function deleteSelectedVertices() {
+    const st = vtxState(); if (!st || !vSel.size) { toast('Click the vertex dots you want to remove (they turn red), then press Delete selected.', 'warn'); return false; }
+    const sets = vertexSets(st.f), by = new Map();
+    vSel.forEach(k => { const [si, i] = k.split(':').map(Number); if (!by.has(si)) by.set(si, new Set()); by.get(si).add(i); });
+    for (const [si, idx] of by) {
+      const set = sets[si]; if (!set) return false;
+      const n = set.closed ? set.coords.length - 1 : set.coords.length;
+      if (n - idx.size < (set.closed ? 3 : 2)) { toast((set.closed ? 'A polygon needs at least 3 corners' : 'A line needs at least 2 vertices') + ' – keep more vertices, or delete the whole feature instead.', 'warn'); return false; }
+    }
+    pushUndo(st.lyr);
+    by.forEach((idx, si) => {
+      const set = sets[si], n = set.closed ? set.coords.length - 1 : set.coords.length, kept = set.coords.slice(0, n).filter((_, i) => !idx.has(i));
+      if (set.closed) kept.push(kept[0].slice());
+      set.coords.splice(0, set.coords.length, ...kept);
+    });
+    const cnt = vSel.size; vSel.clear(); updateAuto(st.lyr, st.f); syncManual(st.lyr);
+    toast(cnt + ' vertice' + (cnt === 1 ? '' : 's') + ' deleted. Undo brings ' + (cnt === 1 ? 'it' : 'them') + ' back.');
+    return true;
+  }
+  window.__lgVtx = { count: () => vSel.size, deleteSelected: () => deleteSelectedVertices(), selectAll: () => selectAllVertices(), clear: () => { vSel.clear(); buildHandles(); } };
+
   function buildHandles() {
     handleGroup.clearLayers();
-    if (eTool !== 'vertex') return;
-    const lyr = pickedLayer(); if (!lyr || !lyr.manual || lyr.picked.size !== 1) return;
-    const f = lyr.sel.get(Array.from(lyr.picked)[0]); if (!f) return;
-    vertexSets(f).forEach(set => {
+    if (eTool !== 'vertex') { vSel.clear(); updateVtxBar(); return; }
+    const lyr = pickedLayer(); if (!lyr || !lyr.manual || lyr.picked.size !== 1) { vSel.clear(); updateVtxBar(); return; }
+    const f = lyr.sel.get(Array.from(lyr.picked)[0]); if (!f) { updateVtxBar(); return; }
+    if (f !== vFeat) { vFeat = f; vSel.clear(); }
+    vertexSets(f).forEach((set, si) => {
       const n = set.closed ? set.coords.length - 1 : set.coords.length;
       for (let i = 0; i < n; i++) {
         const c = set.coords[i];
-        const m = L.marker([c[1], c[0]], { draggable: true, icon: L.divIcon({ className: 'vh', iconSize: [12, 12] }), keyboard: false, zIndexOffset: 1000 });
+        const key = si + ':' + i, m = L.marker([c[1], c[0]], { draggable: true, icon: L.divIcon({ className: 'vh' + (vSel.has(key) ? ' vsel' : ''), iconSize: [12, 12] }), keyboard: false, zIndexOffset: 1000 });
+        m.on('click', ev => { L.DomEvent.stop(ev); if (Date.now() - vDragT < 300 || set.point) return; if (vSel.has(key)) vSel.delete(key); else vSel.add(key); if (m._icon) m._icon.classList.toggle('vsel', vSel.has(key)); updateVtxBar(); });
         m.on('dragstart', () => pushUndo(lyr));
-        m.on('drag', ev => { setVertex(set, i, ev.target.getLatLng()); updateAuto(lyr, f); redrawLayer(lyr); });
-        m.on('dragend', () => syncManual(lyr));
-        m.on('contextmenu dblclick', ev => { L.DomEvent.stop(ev); deleteVertex(lyr, f, set, i); });
+        m.on('drag', ev => {
+          const skip = new Set([set.coords[i]]); if (set.closed && i === 0) skip.add(set.coords[set.coords.length - 1]);
+          const prev = set.coords[i - 1] || (set.closed ? set.coords[set.coords.length - 2] : null);
+          const sn = LGSnap.at(ev.target.getLatLng(), { skipCoords: skip, from: set.point ? null : prev });
+          if (sn) ev.target.setLatLng(sn);
+          setVertex(set, i, ev.target.getLatLng()); updateAuto(lyr, f); redrawLayer(lyr);
+        });
+        m.on('dragend', () => { vDragT = Date.now(); LGSnap.hide(); syncManual(lyr); });
+        m.on('contextmenu dblclick', ev => { L.DomEvent.stop(ev); if (ev.originalEvent) L.DomEvent.preventDefault(ev.originalEvent); if (vSel.size && vSel.has(key)) deleteSelectedVertices(); else { vSel.clear(); deleteVertex(lyr, f, set, i); } });
         handleGroup.addLayer(m);
       }
       if (set.point) return;
@@ -2778,12 +2854,17 @@ const GGCore = (function () {
         const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
         const m = L.marker([mid[1], mid[0]], { draggable: true, icon: L.divIcon({ className: 'vm', iconSize: [10, 10] }), keyboard: false, zIndexOffset: 900 });
         let idx = -1;
-        m.on('dragstart', () => { pushUndo(lyr); idx = i + 1; set.coords.splice(idx, 0, mid.slice()); });
-        m.on('drag', ev => { setVertex(set, idx, ev.target.getLatLng()); updateAuto(lyr, f); redrawLayer(lyr); });
-        m.on('dragend', () => syncManual(lyr));
+        m.on('dragstart', () => { vSel.clear(); pushUndo(lyr); idx = i + 1; set.coords.splice(idx, 0, mid.slice()); });
+        m.on('drag', ev => {
+          const sn = LGSnap.at(ev.target.getLatLng(), { skipCoords: new Set([set.coords[idx]]), from: set.coords[idx - 1] });
+          if (sn) ev.target.setLatLng(sn);
+          setVertex(set, idx, ev.target.getLatLng()); updateAuto(lyr, f); redrawLayer(lyr);
+        });
+        m.on('dragend', () => { LGSnap.hide(); syncManual(lyr); });
         handleGroup.addLayer(m);
       }
     });
+    updateVtxBar();
   }
 
   /* ----- tool switching ----- */
@@ -2793,12 +2874,12 @@ const GGCore = (function () {
     point: 'Draw point: click the map to drop a point.',
     select: 'Select: click a feature (Shift adds or removes) or drag a box around several. Delete removes them; Esc goes back to panning.',
     move: 'Move: drag a feature to move it. If it is part of the selection, the whole selection moves.',
-    vertex: 'Vertices: click a feature, then drag its dots to reshape it. Drag a pale middle dot to add a corner; right-click or double-click a dot to delete it.'
+    vertex: 'Vertices: click a feature, then drag its dots to reshape it. Drag a pale middle dot to add a corner. Right-click a dot to delete it; click several dots (they turn red) and press Delete to remove them all at once.'
   };
   function setEditTool(t) {
     if (t && measureMode) setMeasure(null);
     if (t) { if (traceMode) setTraceMode(false); if (drawMode) setDrawMode(false); if (svMode) setSvMode(false); }
-    eTool = t; hand = !!t; handPts = []; handPrev.clearLayers();
+    eTool = t; hand = !!t; handPts = []; handPrev.clearLayers(); if (LGSnap) LGSnap.hide();
     $$('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
     $('#btnPan').classList.toggle('on', !t);
     $('#map').classList.toggle('handdraw', !!t);
@@ -2823,13 +2904,287 @@ const GGCore = (function () {
   }
 
   /* ----- drawing ----- */
-  function snapPoint(ll) {
-    const pt = map.latLngToContainerPoint(ll); let best = null, bd = 9;
-    const test = c => { const d = toPt(c).distanceTo(pt); if (d < bd) { bd = d; best = L.latLng(c[1], c[0]); } };
-    if (handPts.length) test([handPts[0].lng, handPts[0].lat]);
-    layers.forEach(l => { if (l.manual && l.visible) l.sel.forEach(f => eachCoord(f.geometry, test)); });
-    return best || ll;
+  /* ---------- events, floating panels and snapping: shared by the built-in tools and by any tool file you load later ---------- */
+  var lgHandlers = {};
+  function lgEmit(name, data) { const a = lgHandlers && lgHandlers[name]; if (!a) return; a.slice().forEach(fn => { try { fn(data); } catch (e) { console.error('LG event ' + name, e); } }); }
+  (function () {
+    const s = document.createElement('style');
+    s.textContent = `
+.lgp{position:fixed;z-index:4500;display:flex;flex-direction:column;min-width:220px;min-height:90px;overflow:hidden;resize:both;background:var(--panel,#fff);border:1px solid var(--line,#ccc);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.28);font-size:12.5px;color:var(--ink,#14222d)}
+.lgp[hidden]{display:none}
+.lgp.min{resize:none;height:auto!important;min-height:0}.lgp.min .lgp-b{display:none}
+.lgp-h{flex:none;display:flex;align-items:center;gap:6px;padding:7px 6px 7px 10px;background:var(--ink,#14222d);color:#fff;cursor:move;user-select:none;touch-action:none}
+.lgp-h b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lgp-s{opacity:.75;font-size:11px;white-space:nowrap}
+.lgp-h button{background:none;border:0;color:#fff;font-size:17px;cursor:pointer;line-height:1;padding:0 5px}
+.lgp-b{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.lgp-b::-webkit-scrollbar{width:10px}.lgp-b::-webkit-scrollbar-thumb{background:#b8c4c0;border-radius:6px;border:2px solid transparent;background-clip:content-box}
+.lgsnap{pointer-events:none}.lgsnap svg{display:block;width:20px;height:20px;overflow:visible;fill:none;stroke:#e11d8f;stroke-width:2;stroke-linejoin:round;filter:drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff)}
+.lgsnap span{position:absolute;left:24px;top:-1px;white-space:nowrap;background:#fff;color:#a0166f;border:1px solid #e11d8f;border-radius:3px;font:600 11px/1.1 system-ui,sans-serif;padding:2px 5px;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.lgsnap-ui{padding:8px 10px;display:grid;gap:7px;font-size:12.5px;color:var(--ink,#14222d)}
+.lgsnap-ui label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.lgs-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px}.lgs-grid label{padding:2px 4px;border-radius:4px}.lgs-grid label:hover{background:#eef6f4}
+.lgs-grid svg{width:15px;height:15px;flex:none;fill:none;stroke:#e11d8f;stroke-width:2;stroke-linejoin:round}
+.lgsnap-ui.off .lgs-grid,.lgsnap-ui.off .lgs-r,.lgsnap-ui.off .lgs-ck{opacity:.45}
+.lgs-row{display:flex;gap:6px}.lgs-row button{border:1px solid var(--line,#ccc);background:#fff;border-radius:5px;padding:3px 10px;cursor:pointer;font:inherit;color:inherit}
+.lgs-r input{flex:1;min-width:0}.lgs-note{color:var(--muted,#5b6d79);font-size:11.5px;line-height:1.35}
+#snapPop{position:fixed;z-index:4600;width:300px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;background:var(--panel,#fff);border:1px solid var(--line,#ccc);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.28)}
+#snapPop h4{margin:0;padding:8px 10px;background:var(--ink,#14222d);color:#fff;font-size:13px;border-radius:8px 8px 0 0}`;
+    document.head.appendChild(s);
+  })();
+
+  /* a floating panel that always fits the screen: header stays put, body scrolls, drag by the header, resize from the corner, collapse with – */
+  function lgMakePanel(o) {
+    o = o || {};
+    const id = String(o.id || ('p' + Math.random().toString(36).slice(2, 7))), KEY = 'lgPanel:' + id;
+    const root = document.createElement('div'); root.className = 'lgp'; root.hidden = true;
+    root.innerHTML = '<div class="lgp-h"><b></b><span class="lgp-s"></span><button type="button" data-a="min" title="Collapse / expand">–</button><button type="button" data-a="x" title="Close">×</button></div><div class="lgp-b"></div>';
+    const hd = root.firstChild, body = root.lastChild, ttl = hd.querySelector('b'), sub = hd.querySelector('.lgp-s');
+    ttl.textContent = o.title || 'Tool'; sub.textContent = o.subtitle || '';
+    document.body.appendChild(root);
+    const W = () => document.documentElement.clientWidth, H = () => window.innerHeight;
+    let saveT = 0, placed = false;
+    const keep = () => { clearTimeout(saveT); saveT = setTimeout(() => { try { const r = root.getBoundingClientRect(); localStorage.setItem(KEY, JSON.stringify({ l: r.left, t: r.top, w: r.width, h: root.classList.contains('min') ? (root._h || null) : r.height, m: root.classList.contains('min') })); } catch (e) { /* storage blocked */ } }, 300); };
+    function clamp() {
+      let w = parseFloat(root.style.width) || root.offsetWidth || o.width || 340; w = Math.max(220, Math.min(w, W() - 8)); root.style.width = w + 'px';
+      let l = parseFloat(root.style.left), t = parseFloat(root.style.top); if (!isFinite(l)) l = 4; if (!isFinite(t)) t = 4;
+      l = Math.min(Math.max(4, l), Math.max(4, W() - w - 4)); t = Math.min(Math.max(4, t), Math.max(4, H() - 130));
+      root.style.left = l + 'px'; root.style.top = t + 'px'; root.style.maxHeight = Math.max(110, H() - t - 8) + 'px';
+      const h = parseFloat(root.style.height); if (isFinite(h) && !root.classList.contains('min') && h > H() - t - 8) root.style.height = Math.max(110, H() - t - 8) + 'px';
+    }
+    function place() {
+      if (placed) { clamp(); return; } placed = true;
+      let s = null; try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) { s = null; }
+      const mr = map.getContainer().getBoundingClientRect(), w = Math.min((s && s.w) || o.width || 340, W() - 8);
+      root.style.width = w + 'px';
+      root.style.left = ((s && isFinite(s.l)) ? s.l : Math.max(8, mr.right - w - 10)) + 'px';
+      root.style.top = ((s && isFinite(s.t)) ? s.t : Math.max(8, mr.top + 10)) + 'px';
+      if (s && isFinite(s.h) && s.h > 90) root.style.height = s.h + 'px';
+      if (s && s.m) root.classList.add('min');
+      clamp();
+    }
+    const api = {
+      el: root, body, id,
+      isOpen: () => !root.hidden,
+      show() { root.hidden = false; place(); if (o.onToggle) o.onToggle(true); return api; },
+      hide() { root.hidden = true; if (o.onToggle) o.onToggle(false); return api; },
+      toggle(on) { return (on === undefined ? root.hidden : on) ? api.show() : api.hide(); },
+      setTitle(t) { ttl.textContent = t; return api; }, setSubtitle(t) { sub.textContent = t; return api; },
+      collapse(on) { if (on && !root.classList.contains('min')) root._h = root.getBoundingClientRect().height; root.classList.toggle('min', on === undefined ? !root.classList.contains('min') : !!on); if (!root.classList.contains('min') && root._h) root.style.height = root._h + 'px'; clamp(); keep(); return api; },
+      destroy() { window.removeEventListener('resize', onWin); try { ro && ro.disconnect(); } catch (e) { /* none */ } root.remove(); }
+    };
+    hd.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.a === 'x') api.hide(); else if (b.dataset.a === 'min') api.collapse(); });
+    hd.addEventListener('dblclick', e => { if (!e.target.closest('button')) api.collapse(); });
+    let drag = null;
+    hd.addEventListener('pointerdown', e => { if (e.target.closest('button') || (e.pointerType === 'mouse' && e.button !== 0)) return; const r = root.getBoundingClientRect(); drag = { dx: e.clientX - r.left, dy: e.clientY - r.top }; try { hd.setPointerCapture(e.pointerId); } catch (x) { /* ok */ } });
+    hd.addEventListener('pointermove', e => { if (!drag) return; root.style.left = (e.clientX - drag.dx) + 'px'; root.style.top = (e.clientY - drag.dy) + 'px'; clamp(); });
+    const endDrag = () => { if (drag) { drag = null; clamp(); keep(); } };
+    hd.addEventListener('pointerup', endDrag); hd.addEventListener('pointercancel', endDrag);
+    const onWin = () => { if (!root.hidden) clamp(); };
+    window.addEventListener('resize', onWin);
+    let ro = null; try { ro = new ResizeObserver(() => { if (!root.hidden && !root.classList.contains('min')) keep(); }); ro.observe(root); } catch (e) { /* older browser */ }
+    return api;
   }
+
+  /* ---------- snapping (ArcGIS style): Point, End, Vertex, Intersection, Midpoint, Center, Perpendicular, Tangent, Edge ---------- */
+  var LGSnap = (function () {
+    const TYPES = [
+      { k: 'point', n: 'Point', rank: 0, tip: 'Snap to point features' },
+      { k: 'end', n: 'End', lab: 'Endpoint', rank: 0, tip: 'Snap to the first and last vertex of a line' },
+      { k: 'vertex', n: 'Vertex', rank: 1, tip: 'Snap to any corner (vertex) of a line or polygon' },
+      { k: 'intersection', n: 'Intersection', rank: 2, tip: 'Snap to the place where two lines or edges cross' },
+      { k: 'midpoint', n: 'Midpoint', rank: 3, tip: 'Snap to the middle of a segment' },
+      { k: 'center', n: 'Center', rank: 3, tip: 'Snap to the centre of a polygon or circle' },
+      { k: 'perpendicular', n: 'Perpendicular', rank: 4, tip: 'While drawing or editing a vertex: snap where the new segment meets an edge at 90°' },
+      { k: 'tangent', n: 'Tangent', rank: 4, tip: 'While drawing or editing a vertex: snap where the new segment just touches a circle' },
+      { k: 'edge', n: 'Edge', rank: 6, tip: 'Snap to the nearest point along an edge' }
+    ];
+    const GLYPH = {
+      point: '<circle cx="10" cy="10" r="5"/><circle cx="10" cy="10" r="1.4" fill="#e11d8f"/>',
+      end: '<rect x="5" y="5" width="10" height="10" fill="#e11d8f" fill-opacity=".35"/>',
+      vertex: '<rect x="5" y="5" width="10" height="10"/>',
+      intersection: '<path d="M5 5 15 15M15 5 5 15"/>',
+      midpoint: '<path d="M10 4 16.5 15.5H3.5Z"/>',
+      center: '<circle cx="10" cy="10" r="6"/><path d="M10 7v6M7 10h6"/>',
+      perpendicular: '<path d="M3 16H17M10 16V4M10 11.5H14.5V16"/>',
+      tangent: '<circle cx="10" cy="13" r="5"/><path d="M2 8H18"/>',
+      edge: '<path d="M10 4 16 10 10 16 4 10Z"/>'
+    };
+    const BYK = {}; TYPES.forEach(t => { BYK[t.k] = t; });
+    const KEY = 'lgSnapCfg', defTypes = {}; TYPES.forEach(t => { defTypes[t.k] = true; });
+    const cfg = { on: true, tol: 12, only: false, types: Object.assign({}, defTypes) };
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      if (s && typeof s === 'object') { cfg.on = s.on !== false; cfg.tol = Math.min(30, Math.max(4, +s.tol || 12)); cfg.only = !!s.only; if (s.types) Object.keys(defTypes).forEach(k => { if (k in s.types) cfg.types[k] = !!s.types[k]; }); }
+    } catch (e) { /* first run */ }
+    const subs = [];
+    const changed = () => { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) { /* storage blocked */ } subs.forEach(f => { try { f(); } catch (e) { /* ui gone */ } }); lgEmit('snap', cfg); };
+    let alt = false;
+    window.addEventListener('keydown', e => { if (e.key === 'Alt') alt = true; }); window.addEventListener('keyup', e => { if (e.key === 'Alt') alt = false; }); window.addEventListener('blur', () => { alt = false; });
+
+    function parts(g, cb) {
+      if (!g) return;
+      switch (g.type) {
+        case 'Point': cb('pt', [g.coordinates]); break;
+        case 'MultiPoint': g.coordinates.forEach(c => cb('pt', [c])); break;
+        case 'LineString': cb('line', g.coordinates); break;
+        case 'MultiLineString': g.coordinates.forEach(c => cb('line', c)); break;
+        case 'Polygon': g.coordinates.forEach((r, i) => cb('ring', r, i === 0)); break;
+        case 'MultiPolygon': g.coordinates.forEach(p => p.forEach((r, i) => cb('ring', r, i === 0))); break;
+        case 'GeometryCollection': (g.geometries || []).forEach(x => parts(x, cb)); break;
+      }
+    }
+    const tp = c => map.latLngToContainerPoint([c[1], c[0]]);
+    function centroid(r) {
+      let a = 0, cx = 0, cy = 0;
+      for (let i = 0; i < r.length - 1; i++) { const f = r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; a += f; cx += (r[i][0] + r[i + 1][0]) * f; cy += (r[i][1] + r[i + 1][1]) * f; }
+      return Math.abs(a) < 1e-18 ? null : [cx / (3 * a), cy / (3 * a)];
+    }
+    function circleOf(r) {          // a ring that is (nearly) a circle on screen: returns its centre and radius in pixels
+      if (r.length < 13) return null;
+      const q = r.slice(0, -1).map(tp); let cx = 0, cy = 0; q.forEach(p => { cx += p.x; cy += p.y; }); cx /= q.length; cy /= q.length;
+      let mn = 1e12, mx = 0, sum = 0; q.forEach(p => { const d = Math.hypot(p.x - cx, p.y - cy); if (d < mn) mn = d; if (d > mx) mx = d; sum += d; });
+      const m = sum / q.length; return m > 2 && (mx - mn) / m < 0.02 ? { x: cx, y: cy, r: m } : null;
+    }
+    const asLL = v => !v ? null : Array.isArray(v) ? L.latLng(v[1], v[0]) : L.latLng(v.lat, v.lng);
+
+    /* find(latlng, opts) -> { ll, type, label } or null.
+       opts: from (previous vertex, for Perpendicular / Tangent), extra (geometries being drawn), skipFeat (Set of features to ignore),
+             skipCoords (Set of coordinate arrays being dragged), tol (pixels), off (true = do not snap) */
+    function find(ll, o) {
+      o = o || {};
+      if (!cfg.on || alt || o.off || !ll) return null;
+      const T = cfg.types, tol = o.tol || cfg.tol, pt = map.latLngToContainerPoint(ll), pad = tol + 2;
+      const a = map.containerPointToLatLng([pt.x - pad, pt.y - pad]), b = map.containerPointToLatLng([pt.x + pad, pt.y + pad]);
+      const w0 = Math.min(a.lng, b.lng), w1 = Math.max(a.lng, b.lng), s0 = Math.min(a.lat, b.lat), s1 = Math.max(a.lat, b.lat);
+      const skipC = o.skipCoords, skipF = o.skipFeat, from = asLL(o.from), F = from ? map.latLngToContainerPoint(from) : null;
+      const cands = [], segs = [], rings = [];
+      const inWin = c => c[0] >= w0 && c[0] <= w1 && c[1] >= s0 && c[1] <= s1;
+      const add = (type, lat, lng, d) => { cands.push({ type, ll: L.latLng(lat, lng), d, score: d + BYK[type].rank * 2.5 }); };
+      const addC = (type, c) => { const d = tp(c).distanceTo(pt); if (d <= tol) add(type, c[1], c[0], d); };
+      const addP = (type, p, d) => { const q = map.containerPointToLatLng(p); add(type, q.lat, q.lng, d); };
+      const scan = (kind, cs, outer) => {
+        const n = cs.length; if (!n) return;
+        if (kind === 'pt') { const c = cs[0]; if (T.point && inWin(c) && !(skipC && skipC.has(c))) addC('point', c); return; }
+        let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+        for (let i = 0; i < n; i++) {
+          const c = cs[i]; if (c[0] < x0) x0 = c[0]; if (c[0] > x1) x1 = c[0]; if (c[1] < y0) y0 = c[1]; if (c[1] > y1) y1 = c[1];
+          if (kind === 'ring' && i === n - 1) continue;
+          if (skipC && skipC.has(c)) continue;
+          if (inWin(c)) { const isEnd = kind === 'line' && (i === 0 || i === n - 1); if (isEnd && T.end) addC('end', c); else if (T.vertex) addC('vertex', c); }
+        }
+        for (let i = 0; i < n - 1; i++) {
+          const p = cs[i], q = cs[i + 1]; if (skipC && (skipC.has(p) || skipC.has(q))) continue;
+          if (Math.max(p[0], q[0]) < w0 || Math.min(p[0], q[0]) > w1 || Math.max(p[1], q[1]) < s0 || Math.min(p[1], q[1]) > s1) continue;
+          if (segs.length < 400) segs.push({ p, q });
+        }
+        if (kind === 'ring' && outer && n > 3 && (T.center || T.tangent) && !(x1 < w0 || x0 > w1 || y1 < s0 || y0 > s1) && rings.length < 40) rings.push(cs);
+      };
+      layers.forEach(l => {
+        if (!l.visible || (cfg.only && !l.manual)) return;
+        const arr = l.manual ? Array.from(l.sel.values()) : (Array.isArray(l.loaded) ? l.loaded : []);
+        for (let i = 0; i < arr.length; i++) { const f = arr[i]; if (!f || !f.geometry || (skipF && skipF.has(f))) continue; parts(f.geometry, scan); }
+      });
+      (o.extra || []).forEach(g => parts(g, scan));
+
+      const sp = segs.map(s => ({ p: s.p, q: s.q, P: tp(s.p), Q: tp(s.q) }));
+      sp.forEach(s => {
+        const dx = s.Q.x - s.P.x, dy = s.Q.y - s.P.y, l2 = dx * dx + dy * dy; if (l2 < 1e-9) return;
+        if (T.edge) { const t = Math.max(0, Math.min(1, ((pt.x - s.P.x) * dx + (pt.y - s.P.y) * dy) / l2)), X = L.point(s.P.x + t * dx, s.P.y + t * dy), d = X.distanceTo(pt); if (d <= tol) addP('edge', X, d); }
+        if (T.midpoint && l2 > 64) { const m = [(s.p[0] + s.q[0]) / 2, (s.p[1] + s.q[1]) / 2]; addC('midpoint', m); }
+        if (T.perpendicular && F) { const t = ((F.x - s.P.x) * dx + (F.y - s.P.y) * dy) / l2; if (t > 0.002 && t < 0.998) { const X = L.point(s.P.x + t * dx, s.P.y + t * dy), d = X.distanceTo(pt); if (d <= tol && X.distanceTo(F) > 3) addP('perpendicular', X, d); } }
+      });
+      if (T.intersection) {
+        for (let i = 0; i < sp.length; i++) for (let j = i + 1; j < sp.length; j++) {
+          const A = sp[i], B = sp[j];
+          if (A.p === B.p || A.p === B.q || A.q === B.p || A.q === B.q) continue;
+          const r1x = A.Q.x - A.P.x, r1y = A.Q.y - A.P.y, r2x = B.Q.x - B.P.x, r2y = B.Q.y - B.P.y, den = r1x * r2y - r1y * r2x; if (Math.abs(den) < 1e-9) continue;
+          const t = ((B.P.x - A.P.x) * r2y - (B.P.y - A.P.y) * r2x) / den, u = ((B.P.x - A.P.x) * r1y - (B.P.y - A.P.y) * r1x) / den;
+          if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+          const X = L.point(A.P.x + t * r1x, A.P.y + t * r1y), d = X.distanceTo(pt); if (d <= tol) addP('intersection', X, d);
+        }
+      }
+      rings.forEach(r => {
+        if (T.center) { const c = centroid(r); if (c) addC('center', c); }
+        if (T.tangent && F) {
+          const ci = circleOf(r); if (!ci) return; const dist = Math.hypot(F.x - ci.x, F.y - ci.y); if (dist <= ci.r * 1.01) return;
+          const phi = Math.atan2(F.y - ci.y, F.x - ci.x), al = Math.acos(ci.r / dist);
+          [1, -1].forEach(sg => { const X = L.point(ci.x + ci.r * Math.cos(phi + sg * al), ci.y + ci.r * Math.sin(phi + sg * al)), d = X.distanceTo(pt); if (d <= tol) addP('tangent', X, d); });
+        }
+      });
+      if (!cands.length) return null;
+      let best = cands[0]; for (let i = 1; i < cands.length; i++) if (cands[i].score < best.score) best = cands[i];
+      return { ll: best.ll, type: best.type, label: BYK[best.type].lab || BYK[best.type].n };
+    }
+
+    /* the pink marker + name that follows the cursor */
+    const indLayer = L.layerGroup().addTo(map); let ind = null, indType = null;
+    const iconFor = r => L.divIcon({ className: 'lgsnap', html: '<svg viewBox="0 0 20 20">' + GLYPH[r.type] + '</svg><span>' + r.label + '</span>', iconSize: [20, 20], iconAnchor: [10, 10] });
+    function show(r) {
+      if (!r) { hide(); return; }
+      if (!ind) { ind = L.marker(r.ll, { icon: iconFor(r), interactive: false, keyboard: false, zIndexOffset: 3000 }).addTo(indLayer); indType = r.type; }
+      else { ind.setLatLng(r.ll); if (indType !== r.type) { ind.setIcon(iconFor(r)); indType = r.type; } }
+    }
+    function hide() { if (ind) { indLayer.clearLayers(); ind = null; indType = null; } }
+    function at(ll, o) { const r = find(ll, o); show(r); return r ? r.ll : ll; }     // snap, show the marker, return the position to use
+
+    function mountUI(host) {
+      const root = document.createElement('div'); root.className = 'lgsnap-ui';
+      root.innerHTML = '<label><input type="checkbox" data-m="on"><b>Snapping on</b></label><div class="lgs-grid">' +
+        TYPES.map(t => '<label title="' + t.tip + '"><input type="checkbox" data-t="' + t.k + '"><svg viewBox="0 0 20 20">' + GLYPH[t.k] + '</svg><span>' + t.n + '</span></label>').join('') +
+        '</div><div class="lgs-row"><button type="button" data-a="all">All</button><button type="button" data-a="none">None</button></div>' +
+        '<label class="lgs-r">Distance <input type="range" min="4" max="30" step="1" data-m="tol"><b data-v></b> px</label>' +
+        '<label class="lgs-ck"><input type="checkbox" data-m="only">Only snap to my editable layers</label>' +
+        '<div class="lgs-note">Hold <b>Alt</b> to snap off for one click. A pink marker names the snap while you draw, drag vertices, move features or use an Edit tool. Perpendicular and Tangent work from the previous point.</div>';
+      const sync = () => {
+        root.classList.toggle('off', !cfg.on);
+        root.querySelector('[data-m=on]').checked = cfg.on; root.querySelector('[data-m=only]').checked = cfg.only;
+        root.querySelector('[data-m=tol]').value = cfg.tol; root.querySelector('[data-v]').textContent = cfg.tol;
+        root.querySelectorAll('[data-t]').forEach(c => { c.checked = !!cfg.types[c.dataset.t]; });
+      };
+      root.addEventListener('change', e => {
+        const c = e.target;
+        if (c.dataset.t) cfg.types[c.dataset.t] = c.checked; else if (c.dataset.m === 'on') cfg.on = c.checked; else if (c.dataset.m === 'only') cfg.only = c.checked;
+        else if (c.dataset.m === 'tol') cfg.tol = Math.min(30, Math.max(4, +c.value || 12)); else return;
+        changed();
+      });
+      root.addEventListener('input', e => { if (e.target.dataset.m === 'tol') { cfg.tol = +e.target.value; root.querySelector('[data-v]').textContent = cfg.tol; } });
+      root.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (!b) return; TYPES.forEach(t => { cfg.types[t.k] = b.dataset.a === 'all'; }); changed(); });
+      subs.push(sync); sync(); if (host) host.appendChild(root); return root;
+    }
+    map.on('mouseout', hide);
+    return {
+      cfg, types: TYPES.map(t => ({ key: t.k, name: t.n })), find, show, hide, at, mountUI,
+      isOn: () => cfg.on, setOn(v) { cfg.on = !!v; changed(); },
+      enableType(k, v) { if (k in cfg.types) { cfg.types[k] = v !== false; changed(); } },
+      onChange(fn) { subs.push(fn); }
+    };
+  })();
+
+  /* ribbon button + pop-up for the snapping settings */
+  (function () {
+    const btn = $('#btnSnap'); if (!btn) return; let pop = null;
+    const mark = () => btn.classList.toggle('on', LGSnap.isOn());
+    LGSnap.onChange(mark); mark();
+    function close() { if (pop) pop.hidden = true; }
+    btn.addEventListener('click', () => {
+      if (!pop) { pop = document.createElement('div'); pop.id = 'snapPop'; pop.innerHTML = '<h4>Snapping</h4>'; LGSnap.mountUI(pop); document.body.appendChild(pop); pop.hidden = true; }
+      if (!pop.hidden) { close(); return; }
+      pop.hidden = false; const r = btn.getBoundingClientRect(), w = pop.offsetWidth;
+      pop.style.left = Math.max(8, Math.min(r.left, document.documentElement.clientWidth - w - 8)) + 'px'; pop.style.top = Math.min(r.bottom + 6, window.innerHeight - 80) + 'px';
+      pop.style.maxHeight = Math.max(160, window.innerHeight - r.bottom - 14) + 'px';
+    });
+    document.addEventListener('pointerdown', e => { if (pop && !pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) close(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  })();
+
+  /* snap while drawing: previews and clicks use the snapped position; the line being drawn is also a snap target (close a polygon on its first corner) */
+  function snapDraw(ll) {
+    const last = handPts.length ? handPts[handPts.length - 1] : null;
+    const extra = handPts.length > 1 ? [{ type: 'LineString', coordinates: handPts.map(p => [p.lng, p.lat]) }] : null;
+    return LGSnap.at(ll, { from: last, extra });
+  }
+  function snapPoint(ll) { return snapDraw(ll); }
   function drawPrev(cur) {
     handPrev.clearLayers();
     if (!handPts.length) return;
@@ -2850,7 +3205,7 @@ const GGCore = (function () {
     const cs = handPts.map(p => [Number(p.lng.toFixed(8)), Number(p.lat.toFixed(8))]);
     const g = eTool === 'polygon' ? { type: 'Polygon', coordinates: [cs.concat([cs[0].slice()])] } : { type: 'LineString', coordinates: cs };
     const f = newFeature(lyr, g);
-    handPts = []; drawPrev(null); afterDraw(lyr, f);
+    handPts = []; drawPrev(null); LGSnap.hide(); afterDraw(lyr, f);
   }
   function addPointAt(ll) {
     const lyr = targetFor('point'); pushUndo(lyr);
@@ -2860,17 +3215,20 @@ const GGCore = (function () {
     if (!hand) return;
     if (eTool === 'vertex') { const h = hitTest(e.latlng); if (h) pickFeatures(h.lyr, [h.key], 'replace'); else clearPicks(); return; }
     if (eTool !== 'polygon' && eTool !== 'line' && eTool !== 'point') return;
-    const ll = snapPoint(e.latlng);
-    if (eTool === 'point') { addPointAt(ll); return; }
+    const ll = snapDraw(e.latlng);
+    if (eTool === 'point') { LGSnap.hide(); addPointAt(ll); return; }
     const p = map.latLngToContainerPoint(ll);
     if (handPts.length) {
       if (p.distanceTo(map.latLngToContainerPoint(handPts[handPts.length - 1])) < 3) return;
       if (eTool === 'polygon' && handPts.length >= 3 && p.distanceTo(map.latLngToContainerPoint(handPts[0])) < 10) { finishDraw(); return; }
     }
-    handPts.push(ll); drawPrev(e.latlng); syncHandUi();
+    handPts.push(ll); drawPrev(ll); syncHandUi();
   });
   map.on('dblclick', () => { if (hand && handPts.length) finishDraw(); });
-  map.on('mousemove', e => { if (hand && handPts.length) drawPrev(e.latlng); });
+  map.on('mousemove', e => {
+    if (!hand) return;
+    if (eTool === 'polygon' || eTool === 'line' || eTool === 'point') { const ll = snapDraw(e.latlng); if (handPts.length) drawPrev(ll); }
+  });
 
   /* ----- select box / click select / move (pointer events so touch works too) ----- */
   (function wireEditPointer() {
@@ -2885,7 +3243,9 @@ const GGCore = (function () {
         const l = hit.lyr;
         if (!l.picked.has(hit.key)) pickFeatures(l, [hit.key], add ? 'add' : 'replace');
         pushUndo(l);
-        drag = { mode: 'move', id: e.pointerId, start: ll, lyr: l, moved: false, orig: new Map(Array.from(l.picked).map(k => [k, JSON.stringify(l.sel.get(k).geometry)])) };
+        const pf = Array.from(l.picked).map(k => l.sel.get(k)).filter(Boolean), sp0 = map.latLngToContainerPoint(ll); let anc = [ll.lng, ll.lat], bd = 24;     // grab the vertex nearest the pointer so it can snap
+        pf.forEach(f => eachCoord(f.geometry, c => { const d = toPt(c).distanceTo(sp0); if (d < bd) { bd = d; anc = [c[0], c[1]]; } }));
+        drag = { mode: 'move', id: e.pointerId, start: ll, lyr: l, moved: false, anchor: anc, skip: new Set(pf), orig: new Map(Array.from(l.picked).map(k => [k, JSON.stringify(l.sel.get(k).geometry)])) };
       } else {
         drag = { mode: 'box', id: e.pointerId, start: ll, sp: map.latLngToContainerPoint(ll), hit, add, cur: ll,
           rect: L.rectangle([ll, ll], { color: '#eab308', weight: 2, dashArray: '6 4', fillColor: '#fde047', fillOpacity: 0.12, interactive: false }).addTo(map) };
@@ -2895,15 +3255,17 @@ const GGCore = (function () {
       if (!drag || e.pointerId !== drag.id) return;
       const ll = map.mouseEventToLatLng(e);
       if (drag.mode === 'box') { drag.cur = ll; drag.rect.setBounds(L.latLngBounds(drag.start, ll)); return; }
-      const dx = ll.lng - drag.start.lng, dy = ll.lat - drag.start.lat;
+      let dx = ll.lng - drag.start.lng, dy = ll.lat - drag.start.lat;
       if (!drag.moved && Math.hypot(dx, dy) === 0) return;
+      const want = L.latLng(drag.anchor[1] + dy, drag.anchor[0] + dx), sn = LGSnap.at(want, { skipFeat: drag.skip });
+      if (sn) { dx = sn.lng - drag.anchor[0]; dy = sn.lat - drag.anchor[1]; }
       drag.moved = true;
       drag.orig.forEach((gs, k) => { const g = JSON.parse(gs); eachCoord(g, co => { co[0] += dx; co[1] += dy; }); drag.lyr.sel.get(k).geometry = g; });
       if (!raf) raf = requestAnimationFrame(() => { raf = 0; redrawLayer(drag.lyr); });
     });
     const end = e => {
       if (!drag || e.pointerId !== drag.id) return;
-      const d = drag; drag = null;
+      const d = drag; drag = null; LGSnap.hide();
       try { c.releasePointerCapture(e.pointerId); } catch (err) {}
       if (d.mode === 'move') {
         if (!d.moved) { undoStack.pop(); syncHandUi(); return; }
@@ -2962,6 +3324,7 @@ const GGCore = (function () {
     if (!hand) return;
     if (e.key === 'Enter' && handPts.length) { e.preventDefault(); finishDraw(); }
     else if (e.key === 'Backspace' && handPts.length) { e.preventDefault(); handPts.pop(); drawPrev(null); syncHandUi(); }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && !handPts.length && eTool === 'vertex' && vSel.size) { e.preventDefault(); deleteSelectedVertices(); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && !handPts.length && pickedLayer()) { e.preventDefault(); deletePicked(); }
   });
 
@@ -4126,6 +4489,7 @@ const GGCore = (function () {
       '</div>';
   }
   function renderContents() {
+    lgEmit('layers');
     const box = $('#layerList');
     if (!layers.length) { box.innerHTML = '<div class="empty">No layers yet. Paste a layer address in the bar above and press “Add to map”.</div>'; return; }
     box.innerHTML = layers.slice().reverse().map(cardHtml).join('');
@@ -4980,9 +5344,27 @@ const GGCore = (function () {
       lines.forEach(l => {
         const sz = l.s.size * k; ctx.font = (l.s.italic ? 'italic ' : '') + (l.s.bold ? '700 ' : '400 ') + sz + 'px "' + l.s.font + '","Segoe UI",sans-serif';
         ctx.textAlign = pt ? 'left' : 'center'; ctx.textBaseline = 'top';
-        const x = pt ? a[0] + 8 * k : a[0];
-        ctx.lineWidth = Math.max(2, sz / 4); ctx.strokeStyle = lumOf(l.s.color) > 0.6 ? '#000' : '#fff'; ctx.strokeText(l.t, x, y);
-        ctx.fillStyle = l.s.color; ctx.fillText(l.t, x, y); y += sz * 1.15;
+        const x = pt ? a[0] + 8 * k : a[0], tw = ctx.measureText(l.t).width, bx = pt ? x : x - tw / 2, padX = 5 * k, padY = 1 * k, bh = sz * 1.15;
+        if (l.s.bg || l.s.ln) {                          // label background and border, as set in Label style
+          ctx.save(); ctx.setLineDash([]);
+          if (l.s.bg) { ctx.fillStyle = l.s.bgColor; ctx.fillRect(bx - padX, y - padY, tw + 2 * padX, bh + 2 * padY); }
+          if (l.s.ln) {
+            const lw = Math.max(0.5, l.s.lnWidth * k), dbl = l.s.lnStyle === 'double'; ctx.strokeStyle = l.s.lnColor;
+            if (l.s.lnStyle === 'dashed') ctx.setLineDash([4 * lw, 3 * lw]); else if (l.s.lnStyle === 'dotted') ctx.setLineDash([lw, 2 * lw]);
+            ctx.lineWidth = dbl ? Math.max(3, l.s.lnWidth) * k / 3 : lw;
+            ctx.strokeRect(bx - padX, y - padY, tw + 2 * padX, bh + 2 * padY);
+            if (dbl) { const g = ctx.lineWidth * 2; ctx.strokeRect(bx - padX + g, y - padY + g, tw + 2 * padX - 2 * g, bh + 2 * padY - 2 * g); }
+          }
+          ctx.restore();
+        }
+        if (!l.s.bg) { ctx.lineWidth = Math.max(2, sz / 4); ctx.strokeStyle = lumOf(l.s.color) > 0.6 ? '#000' : '#fff'; ctx.strokeText(l.t, x, y); }
+        ctx.fillStyle = l.s.color; ctx.fillText(l.t, x, y);
+        if (l.s.underline || l.s.strike) {
+          ctx.fillStyle = l.s.color; const th = Math.max(1, sz / 14), x0 = bx;
+          if (l.s.underline) ctx.fillRect(x0, y + sz * 0.95, tw, th);
+          if (l.s.strike) ctx.fillRect(x0, y + sz * 0.5, tw, th);
+        }
+        y += sz * 1.15;
       });
     }
   }
@@ -5307,9 +5689,18 @@ const GGCore = (function () {
             lines.forEach(l => {
               const sz = l.s.size * sc, fi = (l.s.bold ? 1 : 0) + (l.s.italic ? 2 : 0), w = pdfTextW(l.t, sz, fi);
               const x = pt ? a[0] + 8 * sc : a[0] - w / 2, X = fx + x, Y = PH - ftop - (yy + sz * 0.8);
+              const padX = 5 * sc, padY = 1 * sc, bh = sz * 1.15, bxL = X - padX, byB = PH - ftop - (yy + bh + padY), bwid = w + 2 * padX, bhei = bh + 2 * padY;
+              if (l.s.bg) ls += 'q\n' + pdfRgb(l.s.bgColor) + ' rg\n' + pf(bxL) + ' ' + pf(byB) + ' ' + pf(bwid) + ' ' + pf(bhei) + ' re f\nQ\n';     // label background
+              if (l.s.ln) {                                                                                                                                  // label border
+                const lw = Math.max(0.3, l.s.lnWidth * sc), dbl = l.s.lnStyle === 'double', w1 = dbl ? Math.max(3, l.s.lnWidth) * sc / 3 : lw;
+                ls += 'q\n' + pdfRgb(l.s.lnColor) + ' RG\n' + pf(w1) + ' w\n' + (l.s.lnStyle === 'dashed' ? '[' + pf(4 * lw) + ' ' + pf(3 * lw) + '] 0 d\n' : l.s.lnStyle === 'dotted' ? '[' + pf(lw) + ' ' + pf(2 * lw) + '] 0 d\n' : '') +
+                  pf(bxL) + ' ' + pf(byB) + ' ' + pf(bwid) + ' ' + pf(bhei) + ' re S\n' + (dbl ? pf(bxL + 2 * w1) + ' ' + pf(byB + 2 * w1) + ' ' + pf(bwid - 4 * w1) + ' ' + pf(bhei - 4 * w1) + ' re S\n' : '') + 'Q\n';
+              }
               ls += pf(Math.max(0.9, sz / 4)) + ' w\n' + (lumOf(l.s.color) > 0.6 ? '0 0 0' : '1 1 1') + ' RG\n' + pdfRgb(l.s.color) + ' rg\n1 j\n' +
-                'BT /F' + (fi + 1) + ' ' + pf(sz) + ' Tf ' + pf(X) + ' ' + pf(Y) + ' Td 1 Tr (' + pdfEsc(l.t) + ') Tj ET\n' +
+                (l.s.bg ? '' : 'BT /F' + (fi + 1) + ' ' + pf(sz) + ' Tf ' + pf(X) + ' ' + pf(Y) + ' Td 1 Tr (' + pdfEsc(l.t) + ') Tj ET\n') +
                 'BT /F' + (fi + 1) + ' ' + pf(sz) + ' Tf ' + pf(X) + ' ' + pf(Y) + ' Td 0 Tr (' + pdfEsc(l.t) + ') Tj ET\n';
+              if (l.s.underline) ls += pf(X) + ' ' + pf(Y - sz * 0.12 - sz / 28) + ' ' + pf(w) + ' ' + pf(Math.max(0.3, sz / 14)) + ' re f\n';
+              if (l.s.strike) ls += pf(X) + ' ' + pf(Y + sz * 0.28 - sz / 28) + ' ' + pf(w) + ' ' + pf(Math.max(0.3, sz / 14)) + ' re f\n';
               yy += sz * 1.15;
             });
           }
@@ -6200,12 +6591,57 @@ const GGCore = (function () {
         { name: '*road*', kind: 'line', style: { line: '#ea580c', weight: 3, dash: 'dash', lineOp: 1 } },
         { kind: 'point', style: { shape: 'diamond', size: 12, fill: '#2563eb', line: '#ffffff', fillOp: 0.9, weight: 1.5 } }],
       default: { polygon: { line: '#334155', fill: '#94a3b8', fillOp: 0.3, weight: 1.5 } } };
-    const SAMPLE_TOOL = '/* Example tool for Layer Grabber. Load it with Load tools > Load file.\n   Your code receives one object, LG. Add as many buttons as you like with LG.addTool(). */\nLG.addTool({\n  name: \'Count features\',\n  title: \'Show how many features the selected layer has\',\n  icon: \'table\',                        // any built-in icon name, or your own <svg>…</svg> text\n  onClick(LG) {\n    const l = LG.activeLayer();\n    if (!l) return LG.toast(\'Click a layer in the Contents list first.\', \'warn\');\n    LG.toast(l.name + \': \' + LG.features(l.id).length + \' features loaded\');\n  }\n});\n\n/* Other things LG can do:\n   LG.layers()  LG.activeLayer()  LG.features(id)  LG.setStyle(id, {line, fill, weight, fillOp, lineOp, dash, shape, size})\n   LG.addGeoJSON(geojson, \'Layer name\')  LG.appendGeoJSON(layerId, geojson)  LG.applySymbology(symbologyObject)  LG.zoomTo(id)\n   LG.map (the Leaflet map)  LG.toast(msg)  LG.download(blob, filename) */\n';
+    const SAMPLE_TOOL = [
+      '/* Example tool for Layer Grabber. Load it with Load tools > Load file (or drop the .js file on the map).',
+      '   A tool is one plain .js file. It receives one object, LG. You never need to edit the HTML page: every tool you load',
+      '   keeps working next time you open the page. Load as many tool files as you like at once. */',
+      'LG.addTool({',
+      "  name: 'Count features',",
+      "  title: 'Show how many features the selected layer has',",
+      "  icon: 'table',                        // a built-in icon name, or your own <svg>…</svg> text",
+      '  onClick(LG) {',
+      '    const l = LG.activeLayer();',
+      "    if (!l) return LG.toast('Click a layer in the Contents list first.', 'warn');",
+      "    LG.toast(l.name + ': ' + LG.features(l.id).length + ' features loaded');",
+      '  }',
+      '});',
+      '',
+      '/* ---------------- TOOL GUIDE (LG.version 2) ----------------',
+      ' DATA      LG.layers()  LG.activeLayer()  LG.features(id)  LG.picked()  LG.pick(id, keys, mode)  LG.clearPicks()',
+      '           LG.setStyle(id, {line, fill, weight, fillOp, lineOp, dash, shape, size})  LG.zoomTo(id)',
+      "           LG.addGeoJSON(geojson, 'Layer name')  LG.appendGeoJSON(layerId, geojson)  LG.edit(layerId, [{op:'add'|'replace'|'delete', key, geometry, properties}])",
+      '           LG.applySymbology(obj)  LG.addSymbology(obj)  LG.hitTest(latlng, tolerancePx)',
+      ' MAP       LG.map (the Leaflet map)  LG.L (Leaflet)  LG.toast(msg, kind)  LG.setMsg(text)  LG.download(blob, filename)',
+      ' SNAPPING  LG.snap.find(latlng, {from, extra, skipFeat, skipCoords, tol})  -> {ll, type, label} or null',
+      '           LG.snap.at(latlng, opts) -> snapped latlng and shows the pink marker;  LG.snap.hide()',
+      '           LG.snap.isOn()  LG.snap.setOn(bool)  LG.snap.enableType(\'vertex\', true)  LG.snap.mountUI(element)  LG.snap.onChange(fn)',
+      ' PANELS    const p = LG.panel({title, id, width, subtitle})  -> p.body (put your HTML here)  p.show() p.hide() p.toggle() p.collapse()',
+      '           A panel always fits the screen, scrolls, can be dragged, resized and collapsed, and remembers its place.',
+      " EVENTS    LG.on('select' | 'edit' | 'layers' | 'snap', fn)  LG.off(name, fn)   (removed automatically when your tool is stopped)",
+      ' STORAGE   LG.store.get(key, default)  LG.store.set(key, value)   (kept in this browser, private to your tool)',
+      " LIBRARIES await LG.loadScript('https://cdnjs.cloudflare.com/ajax/libs/…')   (loaded once, shared)",
+      ' SHARING   LG.provide(name, value)  LG.use(name)  LG.ui  (the built-in dialog and map pickers: LG.ui.ask, LG.ui.pickPoint, LG.ui.pickPath)',
+      ' CHECKING  LG.version  LG.has(\'snap\')  — use these to stay compatible with older copies of the page.',
+      '*/',
+      ''
+    ].join('\n');
 
     /* ----- tools (plugins) ----- */
     const info = l => ({ id: l.id, name: l.name, kind: gkind(l), visible: !!l.visible, editable: !!l.manual, style: Object.assign({}, l.style), fields: (l.fields || []).map(f => f.name) });
+    const lgShared = {}, lgScripts = {};
     const LGAPI = {
-      version: 1, map, L, toast, setMsg, download,
+      version: 2, map, L, toast, setMsg, download,
+      /* v2: everything a future tool file needs, so the page itself never has to be edited again */
+      has: name => ['snap', 'panel', 'ui', 'events', 'store', 'loadScript', 'provide'].indexOf(name) >= 0,
+      snap: LGSnap, panel: lgMakePanel,
+      on: (name, fn) => { (lgHandlers[name] = lgHandlers[name] || []).push(fn); },
+      off: (name, fn) => { const a = lgHandlers[name]; if (a) { const i = a.indexOf(fn); if (i >= 0) a.splice(i, 1); } },
+      provide: (name, value) => { lgShared[name] = value; }, use: name => lgShared[name],
+      loadScript: url => lgScripts[url] || (lgScripts[url] = new Promise((res, rej) => {
+        const sc = document.createElement('script'); sc.src = url; sc.onload = () => res(true);
+        sc.onerror = () => { delete lgScripts[url]; rej(new Error('Could not load ' + url)); }; document.head.appendChild(sc);
+      })),
+      hitTest: (ll, tol) => { const h = hitTest(L.latLng(ll), tol); return h ? { layerId: h.lyr.id, key: String(h.key) } : null; },
       layers: () => layers.map(info),
       activeLayer: () => { const l = byId(activeId); return l ? info(l) : null; },
       features: id => { const l = byId(id); if (!l) return []; return l.manual ? Array.from(l.sel.values()) : (Array.isArray(l.loaded) ? l.loaded : (l.loaded && l.loaded.features) || []); },
@@ -6255,10 +6691,13 @@ const GGCore = (function () {
       applySymbology: (o, layerId) => { const set = isSym(o) ? { layers: o.layers, default: o.default } : o; return applySet(set, layerId == null ? layers : layers.filter(l => l.id === Number(layerId))); }
     };
     function refreshLoadedGrp() { const g = $('#grpLoaded'); g.hidden = !$('#loadedBtns').children.length; }
-    function stopTool(name) { const o = live.get(name); if (o) { o.buttons.forEach(b => b.remove()); live.delete(name); } refreshLoadedGrp(); }
+    function stopTool(name) { const o = live.get(name); if (o) { o.buttons.forEach(b => b.remove()); (o.cleanups || []).forEach(f => { try { f(); } catch (e) { /* already gone */ } }); live.delete(name); } refreshLoadedGrp(); }
     function runTool(rec) {
-      stopTool(rec.name); const owner = { buttons: [] }; live.set(rec.name, owner);
+      stopTool(rec.name); const owner = { buttons: [], cleanups: [] }; live.set(rec.name, owner);
       const api = Object.assign({}, LGAPI, {
+        on: (n, fn) => { LGAPI.on(n, fn); owner.cleanups.push(() => LGAPI.off(n, fn)); },
+        panel: o => { const pn = lgMakePanel(Object.assign({ id: rec.name }, o || {})); owner.cleanups.push(() => pn.destroy()); return pn; },
+        store: { get: (k, d) => lsGet('lgToolData:' + rec.name + ':' + k, d), set: (k, v) => lsSet('lgToolData:' + rec.name + ':' + k, v) },
         addTool: d => {
           if (!d || typeof d.onClick !== 'function') throw new Error('LG.addTool needs {name, onClick}.');
           const b = document.createElement('button'); b.type = 'button'; b.className = 'tool';
@@ -6269,16 +6708,27 @@ const GGCore = (function () {
           return { remove: () => { b.remove(); refreshLoadedGrp(); } };
         }
       });
+      Object.defineProperty(api, 'ui', { get: () => lgShared.ui, enumerable: true });
       try { new Function('LG', '"use strict";\n' + rec.code + '\n//# sourceURL=lgtool-' + encodeURIComponent(rec.name))(api); return null; }
       catch (e) { stopTool(rec.name); return e; }
     }
-    async function loadToolFile(f) {
-      const code = await f.text(); if (code.length > 500000) throw new Error('That tool file is too large.');
-      if (!window.confirm('Load the tool “' + f.name + '”?\n\nA tool is a small program that runs inside this page and can read and change your layers. Only load tools from someone you trust.')) return;
-      const rec = { name: f.name, code, on: true }, err = runTool(rec);
-      if (err) { toast('The tool “' + f.name + '” could not start: ' + (err.message || err), 'err'); return; }
+    const TOOL_WARN = 'A tool is a small program that runs inside this page and can read and change your layers. Only load tools from someone you trust.';
+    async function loadToolText(name, code, confirmed) {
+      if (code.length > 1500000) throw new Error('That tool file is too large.');
+      if (!confirmed && !window.confirm('Load the tool “' + name + '”?\n\n' + TOOL_WARN)) return false;
+      const rec = { name, code, on: true }, err = runTool(rec);
+      if (err) { toast('The tool “' + name + '” could not start: ' + (err.message || err), 'err'); return false; }
       tools = tools.filter(t => t.name !== rec.name); tools.push(rec); lsSet(LS_TOOLS, tools); renderLoad();
-      toast('Tool “' + f.name + '” loaded. Its button is in the “Loaded tools” group on the toolbar.');
+      toast('Tool “' + name + '” loaded. Its button is in the “Loaded tools” group on the toolbar.');
+      return true;
+    }
+    async function loadToolFile(f, confirmed) { return loadToolText(f.name, await f.text(), confirmed); }
+    async function loadToolUrl(raw) {
+      const u = String(raw || '').trim(); if (!/^https?:\/\//i.test(u)) { toast('Paste the full address of a tool file (https://…/my-tool.js).', 'warn'); return; }
+      if (!window.confirm('Load the tool from\n' + u + '\n\n' + TOOL_WARN)) return;
+      busy(1);
+      try { const r = await fetch(u); if (!r.ok) throw new Error('The server answered ' + r.status + '.'); await loadToolText(decodeURIComponent(u.split('?')[0].split('/').pop() || 'tool.js'), await r.text(), true); }
+      catch (e) { toast('Could not load that tool: ' + (e.message || e) + ' (the site must allow other pages to read it).', 'err'); } finally { busy(-1); }
     }
 
     /* ----- import symbology from other programs (QGIS .qml, SLD, ArcGIS .lyrx / REST JSON, Mapbox style) ----- */
@@ -6588,11 +7038,15 @@ const GGCore = (function () {
 
     /* ----- one entry point for everything the user picks or drops ----- */
     window.__lgRoute = async files => {
-      const rest = [];
+      const rest = [], isTool = f => /\.m?js$/i.test(f.name || ''), js = files.filter(isTool); let many = false;
+      if (js.length > 1) {                                         // several tool files at once: ask one time
+        many = window.confirm('Load these ' + js.length + ' tools?\n\n' + js.map(f => '• ' + f.name).join('\n') + '\n\n' + TOOL_WARN);
+        if (!many) files = files.filter(f => !isTool(f));
+      }
       for (const f of files) {
         const n = f.name || '';
         try {
-          if (/\.js$/i.test(n)) { await loadToolFile(f); continue; }
+          if (isTool(f)) { await loadToolFile(f, many); continue; }
           if (/\.json$/i.test(n) && f.size < 2e6) {
             let o = null; try { o = JSON.parse(await f.text()); } catch (e) { /* not JSON: let the importer report it */ }
             if (isSym(o)) { loadSymObj(o, n); continue; }
@@ -6617,7 +7071,7 @@ const GGCore = (function () {
         '<button class="btn" data-ld="tool-toggle" data-name="' + esc(t.name) + '">' + (live.has(t.name) ? 'Stop' : 'Run') + '</button>' +
         '<button class="btn" data-ld="tool-del" data-name="' + esc(t.name) + '">Remove</button></div>').join('') || '<div class="ld-empty">No tool loaded yet.</div>';
       box.innerHTML =
-        '<div class="ld-drop"><button class="btn primary" data-ld="pick">Load file…</button><span class="hint">Choose a <b>symbology</b> (.json, .qml, .sld, .lyrx), a <b>tool</b> (.js) or a data file (Shapefile .zip, KML, KMZ, GeoJSON, GPX, CSV, WKT). You can also drag files onto the map.</span></div>' +
+        '<div class="ld-drop"><button class="btn primary" data-ld="pick">Load file…</button><span class="hint">Choose one or many files: a <b>symbology</b> (.json, .qml, .sld, .lyrx), a <b>tool</b> (.js) or a data file (Shapefile .zip, KML, KMZ, GeoJSON, GPX, CSV, WKT). You can also drag files onto the map.</span></div>' +
         '<div class="ld-h">Symbologies</div>' + symRows +
         '<div class="ld-acts"><button class="btn" data-ld="sym-save">Save current symbology</button><button class="btn" data-ld="sym-sample">Download sample symbology</button></div>' +
         '<div class="ld-h">Import symbology from other programs</div>' +
@@ -6625,7 +7079,8 @@ const GGCore = (function () {
         '<div class="ld-row"><input type="text" id="ldSymUrl" placeholder="ArcGIS layer address, e.g. https://…/FeatureServer/0" style="flex:1;min-width:200px;border:1px solid var(--line);border-radius:5px;padding:6px 8px" autocomplete="off" spellcheck="false"><button class="btn" data-ld="sym-url">Read from address</button></div>' +
         '<div class="ld-acts"><button class="btn" data-ld="sym-svc" title="Ask the server of each loaded service layer for its own colours and apply them">Read symbology of loaded service layers</button></div>' +
         '<div class="ld-h">Tools</div>' + toolRows +
-        '<div class="ld-acts"><button class="btn" data-ld="tool-sample">Download sample tool</button></div>' +
+        '<div class="ld-row"><input type="text" id="ldToolUrl" placeholder="…or the address of a tool file, e.g. https://…/my-tool.js" style="flex:1;min-width:200px;border:1px solid var(--line);border-radius:5px;padding:6px 8px" autocomplete="off" spellcheck="false"><button class="btn" data-ld="tool-url">Load from address</button></div>' +
+        '<div class="ld-acts"><button class="btn" data-ld="tool-sample">Download sample tool (with the full tool guide)</button></div>' +
         '<p class="hint">A symbology file styles layers by name (wildcards <code>*</code> and <code>?</code> work) or by type (polygon, line, point). Colors, widths, transparency, line style, point shape and labels are supported, and they carry into the exported PDF.<br><b>Only load tools from people you trust:</b> a tool is a program that runs in this page and can read and change your layers. Loaded symbologies and tools are kept in this browser and come back next time.</p>';
     }
     box.addEventListener('click', async e => {
@@ -6643,6 +7098,7 @@ const GGCore = (function () {
       else if (a === 'sym-del') { symSets = symSets.filter(x => x.id !== b.dataset.id); lsSet(LS_SYM, symSets); renderLoad(); }
       else if (a === 'sym-save') { if (!layers.length) { toast('Add a layer first.', 'warn'); return; } saveJson(currentSymbology(), 'symbology.json'); }
       else if (a === 'sym-sample') saveJson(SAMPLE_SYM, 'sample-symbology.json');
+      else if (a === 'tool-url') loadToolUrl(($('#ldToolUrl') || {}).value);
       else if (a === 'tool-sample') download(new Blob([SAMPLE_TOOL], { type: 'text/javascript' }), 'sample-tool.js');
       else if (a === 'tool-toggle') {
         const t = tools.find(x => x.name === b.dataset.name); if (!t) return;
@@ -6669,8 +7125,403 @@ const GGCore = (function () {
     renderLoad();
   })();
 
+  /* hooks for the command line (zoom commands) */
+  window.__lgMap = map; window.__lgZoomPicked = zoomToPicked;
+  window.__lgExtents = function () { const out = []; layers.forEach(l => { if (l.visible === false) return; try { const b = l.manual ? l.gj.getBounds() : extentFromMeta(l.meta); if (b && b.isValid && b.isValid()) out.push(b); } catch (e) { /* skip */ } }); return out; };
   loadEdits(); renderContents(); renderTable(); renderSel(); renderPicks(); syncHandUi(); renderAttrPane(); updateTblBar();
 })();
 </script>
+
+<!-- ================= Command line (AutoCAD-style): type anywhere, suggestions appear at the mouse pointer ================= -->
+<style id="cmdline-css">
+#cmdBox{position:fixed;z-index:7000;width:300px;max-width:calc(100vw - 16px);font:13px/1.35 "Segoe UI",system-ui,sans-serif;color:#14222d;filter:drop-shadow(0 8px 22px rgba(0,0,0,.35))}
+#cmdBox .cb-in{display:flex;align-items:center;gap:6px;background:#0f1c26;border:1px solid #0f766e;border-radius:6px 6px 0 0;padding:5px 8px}
+#cmdBox .cb-pr{color:#5eead4;font-weight:700;font-size:12px;letter-spacing:.3px}
+#cmdBox input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#fff;font:600 14px/1.2 Consolas,"Courier New",monospace;text-transform:uppercase;padding:2px 0}
+#cmdBox .cb-list{background:#fff;border:1px solid #cfd8d4;border-top:0;max-height:288px;overflow:auto}
+#cmdBox .cb-i{display:flex;align-items:center;gap:8px;padding:5px 9px;cursor:pointer;border-bottom:1px solid #eef1ef}
+#cmdBox .cb-i:last-child{border-bottom:0}
+#cmdBox .cb-i.sel{background:#d9efec}
+#cmdBox .cb-n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#cmdBox .cb-n b{color:#0b5a54;text-decoration:underline}
+#cmdBox .cb-a{font:600 11px Consolas,monospace;background:#e8edea;border-radius:3px;padding:1px 5px;color:#35505f}
+#cmdBox .cb-g{font-size:11px;color:#6a7c87}
+#cmdBox .cb-none{padding:8px 10px;color:#6a7c87}
+#cmdBox .cb-hint{background:#22394a;color:#d6e3e8;font-size:11.5px;padding:4px 9px;border-radius:0 0 6px 6px;min-height:22px}
+#cmdBox .cb-hint.err{background:#b42318;color:#fff}
+</style>
+<div id="cmdBox" hidden role="combobox" aria-expanded="true" aria-haspopup="listbox">
+  <div class="cb-in"><span class="cb-pr">CMD ›</span><input id="cmdIn" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Type a command"></div>
+  <div class="cb-list" id="cmdList" role="listbox"></div>
+  <div class="cb-hint" id="cmdHint">↑↓ choose · Enter or Space run · Tab complete · Esc cancel</div>
+</div>
+<script id="cmdline-js">
+(function () {
+  'use strict';
+  var box = document.getElementById('cmdBox'), inp = document.getElementById('cmdIn'),
+      listEl = document.getElementById('cmdList'), hintEl = document.getElementById('cmdHint');
+  var DEFAULT_HINT = hintEl.textContent;
+  var mx = Math.round(innerWidth / 2), my = Math.round(innerHeight / 2), hasMouse = false;
+  var items = [], shown = [], sel = 0, lastId = null, recents = [], recent = {}, zwActive = false;
+  try { recents = JSON.parse(localStorage.getItem('lg_cmd_recent') || '[]') || []; } catch (e) { recents = []; }
+  var NO_REPEAT = { 'B:btnDel': 1, 'B:btnHandClear': 1 };   // never repeated by Enter/Space (destructive)
+  function remember(it) {
+    if (!it) return;
+    recent[it.id] = Date.now();
+    recents = [it.id].concat(recents.filter(function (x) { return x !== it.id; })).slice(0, 15);
+    try { localStorage.setItem('lg_cmd_recent', JSON.stringify(recents)); } catch (e) { /* storage blocked */ }
+    if (!NO_REPEAT[it.id]) lastId = it.id;
+  }
+
+  /* AutoCAD-style short names. Key = ribbon button id, or "E:<edit tool name>" for the Edit tools panel. */
+  var ALIAS = {
+    btnZoomLayer: ['Z', 'ZL', 'ZOOM'], btnTable: ['TB', 'TABLE'], btnDraw: ['BOX'], btnClearBox: ['CB'],
+    btnImport: ['IM', 'IMP', 'IMPORT'], btnLoad: ['LT', 'PLUGIN'], btnNewLayer: ['NL', 'NEW'], btnCopyLayer: ['CE'],
+    btnFields: ['EF', 'FIELDS'], btnHandDl: ['DD'], btnHandClear: ['CLR'], btnSnap: ['SN', 'OS', 'OSNAP'],
+    btnDrawPoly: ['POL', 'POLYGON'], btnDrawLine: ['L', 'PL', 'PLINE', 'LINE'], btnDrawPoint: ['PO', 'PT', 'POINT'],
+    btnPan: ['P', 'PAN'], btnSelect: ['S', 'SEL', 'SELECT'], btnSelAll: ['ALL', 'SA'], btnSelClear: ['DS', 'DESEL'],
+    btnMove: ['M', 'MOVE'], btnVertex: ['V', 'VE', 'VERTEX'], btnAttr: ['ATT', 'ATTR', 'PR'], btnDel: ['E', 'ERASE', 'DEL'],
+    btnCopy: ['CO', 'CP', 'COPY'], btnPaste: ['PA', 'PASTE'], btnPasteTo: ['PASTETO', 'PAT'], btnUndo: ['U', 'UNDO'],
+    btnRedo: ['REDO', 'RE'], btnMDist: ['DI', 'DIST'], btnMArea: ['AA', 'AREA'], btnMCirc: ['RAD', 'RADIUS'],
+    btnMLoc: ['ID'], btnMSel: ['MS'], btnMClear: ['MC'], btnStreet: ['SV', 'STREET'], btnPdf: ['PDF']
+  };
+  var EALIAS = {
+    'Circle': ['C', 'CIR'], 'Rectangle': ['REC', 'RECT'], 'Triangle': ['TRI'], 'Move': ['MB', 'MOVEBY'], 'Move To': ['MT'],
+    'Rotate': ['RO'], 'Scale': ['SC'], 'Transform': ['TF'], 'Align Features': ['AL', 'ALIGN'], 'Align Edge': ['AE'],
+    'Rubbersheet': ['RS'], 'Edit Vertices': ['EV'], 'Delete Vertices': ['DV'], 'Reshape': ['RSH'], 'Replace Geometry': ['RG'],
+    'Continue Feature': ['CF'], 'Extend or Trim': ['TR', 'EX', 'TRIM', 'EXTEND'], 'Fillet': ['F', 'FI'], 'Generalize': ['GEN'],
+    'Smooth': ['SM'], 'Split': ['SP', 'BR', 'BREAK'], 'Explode': ['X', 'EXPL'], 'Clip': ['CL'], 'Planarize': ['PZ'],
+    'Construct Polygons': ['CON'], 'Merge': ['J', 'JOIN', 'MG'], 'Buffer': ['BU'], 'Duplicate Vertical': ['DUP'],
+    'Offset': ['O', 'OF'], 'Mirror': ['MI'], 'Copy Parallel': ['CPAR'], 'Create Radial': ['RDL', 'RADIAL'],
+    'Create Regular Polygon': ['REG', 'RP']
+  };
+
+
+  /* ---------- zoom commands ---------- */
+  var hist = [], hi = -1, navigating = false;
+  function M() { return window.__lgMap; }
+  function say(msg, kind) {
+    var t = document.getElementById('toast'); if (!t) return;
+    t.textContent = msg; t.className = 'show ' + (kind || ''); clearTimeout(say.t); say.t = setTimeout(function () { t.className = ''; }, 4000);
+  }
+  function snap() {
+    var m = M(); if (!m || navigating) return;
+    var c = m.getCenter(), z = m.getZoom(), l = hist[hi];
+    if (l && l.z === z && Math.abs(l.c.lat - c.lat) < 1e-9 && Math.abs(l.c.lng - c.lng) < 1e-9) return;
+    hist = hist.slice(0, hi + 1); hist.push({ c: c, z: z }); if (hist.length > 60) hist.shift(); hi = hist.length - 1;
+  }
+  if (M()) { snap(); M().on('moveend', snap); }
+  function go(i) {
+    var m = M(); if (i < 0 || i >= hist.length) { say(i < 0 ? 'No earlier view.' : 'No later view.', 'warn'); return; }
+    hi = i; navigating = true; m.setView(hist[i].c, hist[i].z, { animate: false }); setTimeout(function () { navigating = false; }, 60);
+  }
+  function zoomWindow() {
+    var m = M(), c = m.getContainer(), start = null, rb = document.createElement('div'), drag = m.dragging.enabled();
+    rb.style.cssText = 'position:fixed;z-index:6500;border:2px dashed #f5b301;background:rgba(245,179,1,.15);pointer-events:none;display:none';
+    zwActive = true; document.body.appendChild(rb); c.style.cursor = 'crosshair'; if (drag) m.dragging.disable();
+    say('Zoom window: press at one corner and drag to the opposite corner. Esc cancels.');
+    function end() {
+      c.removeEventListener('pointerdown', dn, true); window.removeEventListener('pointermove', mv, true);
+      window.removeEventListener('pointerup', up, true); window.removeEventListener('keydown', kd, true);
+      zwActive = false; rb.remove(); c.style.cursor = ''; if (drag) m.dragging.enable();
+      setTimeout(function () { c.removeEventListener('click', sw, true); }, 50);
+    }
+    function sw(e) { e.stopPropagation(); }
+    function dn(e) { if (e.button) return; e.preventDefault(); e.stopPropagation(); start = [e.clientX, e.clientY]; rb.style.display = 'block'; mv(e); c.addEventListener('click', sw, true); }
+    function mv(e) {
+      if (!start) return; e.preventDefault();
+      rb.style.left = Math.min(start[0], e.clientX) + 'px'; rb.style.top = Math.min(start[1], e.clientY) + 'px';
+      rb.style.width = Math.abs(e.clientX - start[0]) + 'px'; rb.style.height = Math.abs(e.clientY - start[1]) + 'px';
+    }
+    function up(e) {
+      if (!start) return; var s0 = start; end();
+      if (Math.abs(e.clientX - s0[0]) < 6 || Math.abs(e.clientY - s0[1]) < 6) return;
+      var r = c.getBoundingClientRect();
+      var a = m.containerPointToLatLng(L.point(s0[0] - r.left, s0[1] - r.top)), b = m.containerPointToLatLng(L.point(e.clientX - r.left, e.clientY - r.top));
+      m.fitBounds(L.latLngBounds(a, b));
+    }
+    function kd(e) { if (e.key === 'Escape') { e.stopPropagation(); end(); } }
+    c.addEventListener('pointerdown', dn, true); window.addEventListener('pointermove', mv, true);
+    window.addEventListener('pointerup', up, true); window.addEventListener('keydown', kd, true);
+  }
+  var ZOOMS = [
+    { id: 'Z:in', label: 'Zoom In', aliases: ['ZI', 'IN'], desc: 'Zoom in one level', fn: function () { M().zoomIn(); } },
+    { id: 'Z:out', label: 'Zoom Out', aliases: ['ZO', 'OUT'], desc: 'Zoom out one level', fn: function () { M().zoomOut(); } },
+    { id: 'Z:win', label: 'Zoom Window', aliases: ['ZW', 'W'], desc: 'Drag a box on the map to zoom to it', fn: zoomWindow },
+    { id: 'Z:ext', label: 'Zoom Extents (all layers)', aliases: ['ZE', 'ZA', 'ALLZOOM'], desc: 'Fit every visible layer in the view', fn: function () {
+        var bs = window.__lgExtents ? window.__lgExtents() : [];
+        if (!bs.length) { say('Add a layer first (or draw something) – nothing to zoom to.', 'warn'); return; }
+        var b = bs[0]; bs.slice(1).forEach(function (x) { b = b.extend(x); }); M().fitBounds(b, { padding: [30, 30], maxZoom: 19 }); } },
+    { id: 'Z:sel', label: 'Zoom Selected', aliases: ['ZS'], desc: 'Zoom to the selected features', fn: function () {
+        if (!window.__lgZoomPicked || !window.__lgZoomPicked()) say('Select a feature first (Select tool).', 'warn'); } },
+    { id: 'Z:prev', label: 'Zoom Previous', aliases: ['ZP', 'PREV'], desc: 'Go back to the previous view', fn: function () { go(hi - 1); } },
+    { id: 'Z:next', label: 'Zoom Next', aliases: ['ZN', 'NEXT'], desc: 'Go forward to the next view', fn: function () { go(hi + 1); } },
+    { id: 'Z:lvl', label: 'Zoom to Level…', aliases: ['ZV', 'LEVEL'], desc: 'Type a zoom level (0 = world … 26 = closest)', fn: function () {
+        var v = window.prompt('Zoom level (0–26):', String(M().getZoom())); if (v === null) return; v = parseFloat(v);
+        if (isFinite(v)) M().setZoom(Math.max(0, Math.min(26, v))); else say('Enter a number from 0 to 26.', 'warn'); } },
+    { id: 'Z:pt', label: 'Zoom to Coordinates…', aliases: ['ZC', 'GOTO'], desc: 'Go to “latitude, longitude”', fn: function () {
+        var v = window.prompt('Latitude, longitude (e.g. 17.385, 78.4867):', ''); if (!v) return;
+        var n = v.match(/-?\d+(?:\.\d+)?/g); if (!n || n.length < 2 || Math.abs(+n[0]) > 90 || Math.abs(+n[1]) > 180) { say('Enter it as latitude, longitude.', 'warn'); return; }
+        M().setView([+n[0], +n[1]], Math.max(M().getZoom(), 16)); } },
+    { id: 'Z:me', label: 'Zoom to My Location', aliases: ['ZM', 'LOC'], desc: 'Use your device location', fn: function () {
+        if (!navigator.geolocation) { say('This browser cannot give your location.', 'warn'); return; }
+        navigator.geolocation.getCurrentPosition(function (p) { M().setView([p.coords.latitude, p.coords.longitude], 17); },
+          function () { say('Location was blocked or unavailable.', 'warn'); }); } },
+    { id: 'Z:100', label: 'Zoom Street Level', aliases: ['Z1', 'STREETZ'], desc: 'Jump to zoom level 18', fn: function () { M().setZoom(18); } },
+    { id: 'Z:world', label: 'Zoom World', aliases: ['ZWORLD', 'WORLD'], desc: 'Show the whole world', fn: function () { M().setView([20, 0], 2); } }
+  ];
+
+
+  /* ---------- right-click on the map = copy that location's coordinates ---------- */
+  function copyText(t) {
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      ta.remove(); return ok;
+    }
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(t).then(function () { return true; }, function () { return fallback(); });
+    return Promise.resolve(fallback());
+  }
+  if (M()) M().on('contextmenu', function (ev) {
+    var oe = ev.originalEvent, tg = oe && oe.target;
+    if (tg && tg.closest && tg.closest('.lgx-ov, .vh, .leaflet-control')) return;      // leave tool pickers and vertex dots alone
+    if (!document.documentElement.classList.contains('unlocked')) return;
+    if (oe && oe.preventDefault) oe.preventDefault();
+    var lat = ev.latlng.lat.toFixed(7), lng = ((((ev.latlng.lng + 180) % 360) + 360) % 360 - 180).toFixed(7), txt = lat + ', ' + lng;
+    var dot = L.circleMarker(ev.latlng, { radius: 7, color: '#f5b301', weight: 3, fillOpacity: 0.35, interactive: false }).addTo(M());
+    setTimeout(function () { M().removeLayer(dot); }, 900);
+    copyText(txt).then(function (ok) { say(ok ? 'Copied coordinates: ' + txt : 'Could not copy automatically. Coordinates: ' + txt, ok ? '' : 'warn'); });
+  });
+
+
+  /* ---------- hold the mouse wheel (middle button) and drag = temporary pan, current tool stays active ---------- */
+  (function () {
+    var m = M(); if (!m) return;
+    var c = m.getContainer(), panning = false, lx = 0, ly = 0, oldCursor = '';
+    function ours(e) {
+      if (e.button !== 1 || !document.documentElement.classList.contains('unlocked')) return false;
+      if (!c.contains(e.target)) return false;
+      return !(e.target.closest && e.target.closest('.leaflet-control, #measPanel, #attrPane, #vtxBar, .lgp, #cmdBox'));
+    }
+    function stop(e) { e.preventDefault(); e.stopPropagation(); }
+    function begin(e) {
+      if (!ours(e)) return;
+      e.stopPropagation();
+      if (e.type !== 'mousedown') return;                   // never cancel pointerdown: that would suppress the mousedown that starts the pan
+      e.preventDefault();
+      if (panning) return;
+      panning = true; lx = e.clientX; ly = e.clientY; oldCursor = c.style.cursor; c.style.cursor = 'grabbing';
+    }
+    function move(e) {
+      if (!panning) return;
+      if (!(e.buttons & 4)) { end(); return; }              // wheel button was released somewhere we could not see
+      var dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
+      if (dx || dy) m.panBy([-dx, -dy], { animate: false });
+    }
+    function end() { if (!panning) return; panning = false; c.style.cursor = oldCursor; }
+    window.addEventListener('mousedown', begin, true);
+    window.addEventListener('pointerdown', begin, true);
+    window.addEventListener('mousemove', move, true);
+    window.addEventListener('mouseup', function (e) { if (e.button === 1) { if (panning) stop(e); end(); } }, true);
+    window.addEventListener('auxclick', function (e) { if (e.button === 1 && c.contains(e.target)) stop(e); }, true);
+    window.addEventListener('blur', end);
+  })();
+
+  /* ---------- build the command list fresh each time (so tools you load later appear too) ---------- */
+  function visible(b) { return b && b.isConnected && !b.closest('[hidden]'); }
+  function collect() {
+    var out = [];
+    document.querySelectorAll('.ribbon button.tool').forEach(function (b) {
+      if (b.id === 'btnMenu' || !visible(b)) return;
+      var label = b.textContent.replace(/\s+/g, ' ').trim(); if (!label) return;
+      var exp = b.hasAttribute('data-export');
+      var al = (b.id && ALIAS[b.id]) || (exp ? ['DL', 'EXPORT', 'DOWNLOAD'] : []);
+      out.push({ id: 'B:' + (b.id || label), label: label, aliases: al, group: b.closest('#loadedBtns') ? 'Loaded tool' : 'Ribbon',
+        desc: b.title || label, btn: b });
+    });
+    var tools = window.__lgxTools || {};
+    Object.keys(tools).forEach(function (n) {
+      out.push({ id: 'E:' + n, label: n, aliases: EALIAS[n] || [], group: 'Edit tools', desc: 'Edit tools › ' + n, edit: n });
+    });
+    if (M()) ZOOMS.forEach(function (z) { out.push({ id: z.id, label: z.label, aliases: z.aliases, group: 'Zoom', desc: z.desc, fn: z.fn }); });
+    var bm = document.getElementById('basemapSel');
+    if (bm) Array.prototype.forEach.call(bm.options, function (o) {
+      out.push({ id: 'M:' + o.value, label: 'Basemap: ' + o.text, aliases: [], group: 'Basemap', desc: 'Switch the basemap', basemap: o.value });
+    });
+    return out;
+  }
+
+  /* ---------- matching ---------- */
+  function subseq(q, s) { var i = 0; for (var j = 0; j < s.length && i < q.length; j++) if (s[j] === q[i]) i++; return i === q.length; }
+  function score(it, q) {
+    var best = 0, hit = null, n = it.label.toLowerCase(), s;
+    it.aliases.forEach(function (a) {
+      var al = a.toLowerCase();
+      if (al === q) s = 1000; else if (al.indexOf(q) === 0) s = 800 - (al.length - q.length); else return;
+      if (s > best) { best = s; hit = a; }
+    });
+    if (n === q) s = 900;
+    else if (n.indexOf(q) === 0) s = 700 - (n.length - q.length);
+    else if (n.split(/[\s:›-]+/).some(function (w) { return w.indexOf(q) === 0; })) s = 500;
+    else if (n.indexOf(q) > -1) s = 300;
+    else if (q.length >= 3 && subseq(q, n.replace(/\s+/g, ''))) s = 100;
+    else s = 0;
+    if (s > best) { best = s; hit = null; }
+    return { s: best, alias: hit };
+  }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function mark(label, q) {
+    var i = label.toLowerCase().indexOf(q);
+    if (i < 0) return esc(label);
+    return esc(label.slice(0, i)) + '<b>' + esc(label.slice(i, i + q.length)) + '</b>' + esc(label.slice(i + q.length));
+  }
+
+  /* ---------- drawing the box next to the mouse ---------- */
+  function place() {
+    var w = box.offsetWidth, h = box.offsetHeight, x = mx + 8, y = my + 8;
+    if (x + w > innerWidth - 8) x = mx - w - 8;
+    if (y + h > innerHeight - 8) y = my - h - 8;
+    box.style.left = Math.max(8, x) + 'px'; box.style.top = Math.max(8, y) + 'px';
+  }
+  function render() {
+    var q = inp.value.trim().toLowerCase();
+    shown = [];
+    if (q) {
+      items.forEach(function (it) { var r = score(it, q); if (r.s > 0) shown.push({ it: it, s: r.s + (recent[it.id] || 0) * 0.001, alias: r.alias }); });
+      shown.sort(function (a, b) { return b.s - a.s || a.it.label.localeCompare(b.it.label); });
+      shown = shown.slice(0, 9);
+    } else {
+      shown = recents.map(function (id) { return items.filter(function (i) { return i.id === id; })[0]; })
+        .filter(Boolean).slice(0, 9).map(function (it) { return { it: it, s: 1, alias: null }; });
+    }
+    if (sel >= shown.length) sel = 0;
+    if (!shown.length) { listEl.innerHTML = '<div class="cb-none">' + (q ? 'No command starts with “' + esc(q) + '”' : 'No recent commands yet – start typing a name (L, M, TR …)') + '</div>'; }
+    else listEl.innerHTML = shown.map(function (r, i) {
+      var chip = r.alias || (r.it.aliases[0] || '');
+      return '<div class="cb-i' + (i === sel ? ' sel' : '') + '" role="option" data-i="' + i + '">' +
+        '<span class="cb-n">' + mark(r.it.label, q) + '</span>' +
+        (chip ? '<span class="cb-a">' + esc(chip) + '</span>' : '') + '<span class="cb-g">' + (q ? '' : (i === 0 ? 'last · ' : 'recent · ')) + esc(r.it.group) + '</span></div>';
+    }).join('');
+    showHint(shown[sel] ? shown[sel].it.desc : DEFAULT_HINT);
+    place();
+    var s = listEl.querySelector('.sel'); if (s && s.scrollIntoView) s.scrollIntoView({ block: 'nearest' });
+  }
+  function showHint(t, err) { hintEl.textContent = t; hintEl.className = 'cb-hint' + (err ? ' err' : ''); }
+
+  function open(first) {
+    items = collect(); sel = 0;
+    if (!hasMouse) { var m = document.getElementById('map'); if (m) { var r = m.getBoundingClientRect(); mx = r.left + r.width / 2 - 100; my = r.top + r.height / 2 - 60; } }
+    box.hidden = false; inp.value = first || ''; render(); inp.focus();
+    try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch (e) { /* ignore */ }
+  }
+  function close() { if (box.hidden) return; box.hidden = true; inp.value = ''; inp.blur(); }
+
+  /* ---------- run a command ---------- */
+  function run(it) {
+    if (!it) return;
+    if (it.fn) { close(); try { it.fn(); } catch (e) { say('Zoom: ' + (e.message || e), 'err'); } }
+    else if (it.btn) {
+      if (it.btn.disabled) { showHint('“' + it.label + '” is not available yet – ' + (it.btn.title || 'select a layer or feature first') + '.', true); return; }
+      close(); it.btn.click();
+    } else if (it.edit) {
+      close();
+      var panelBtn = findPanelBtn(it.edit);
+      if (!panelBtn) {                                  // panel not built yet: open it once through its ribbon button
+        var opener = Array.prototype.find.call(document.querySelectorAll('#loadedBtns .tool'), function (b) { return b.textContent.trim() === 'Edit tools'; });
+        if (opener) opener.click();
+        panelBtn = findPanelBtn(it.edit);
+      }
+      if (panelBtn) panelBtn.click(); else if (window.__lgxTools[it.edit]) window.__lgxTools[it.edit]();
+    } else if (it.basemap != null) {
+      var bm = document.getElementById('basemapSel'); close();
+      bm.value = it.basemap; bm.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    remember(it);
+  }
+  function findPanelBtn(name) {
+    return Array.prototype.find.call(document.querySelectorAll('#lgxPanel .lgx-b'), function (b) {
+      var s = b.querySelector('span'); return s && s.textContent.trim() === name;
+    });
+  }
+
+  /* ---------- keyboard: one capture-phase handler so tools that listen for Enter/Esc never see these keys ---------- */
+  function blocked(t) {
+    if (!document.documentElement.classList.contains('unlocked')) return true;
+    if (t && (/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable)) return true;
+    if (document.querySelector('.lgx-dlgov')) return true;
+    return Array.prototype.some.call(document.querySelectorAll('.overlay'), function (o) { return !o.hidden; });
+  }
+
+  /* ---------- Enter / Space = repeat last tool, ↑ ↓ = recent tools ---------- */
+  function idle() {                                    // true when no tool is mid-use, so Enter/Space are free to repeat
+    if (zwActive || document.querySelector('.lgx-ov, .lgx-dlgov, #lgxPanel .lgx-b.on')) return false;
+    var on = document.querySelectorAll('.ribbon button.tool.on');
+    for (var i = 0; i < on.length; i++) if (!/^(btnPan|btnTable|btnSnap)$/.test(on[i].id)) return false;
+    return true;
+  }
+  function plainTarget(t) {                            // focus is on the page/map, not on a button, link or field
+    if (blocked(t)) return false;
+    if (t && /^(BUTTON|A|SUMMARY|LABEL)$/.test(t.tagName)) return false;
+    return !t || t === document.body || t === document.documentElement || !!(t.closest && t.closest('#map'));
+  }
+  document.addEventListener('click', function (e) {    // clicking a ribbon / Edit-tools button also counts as "last tool"
+    var b = e.target.closest && e.target.closest('.ribbon button.tool, #lgxPanel .lgx-b'); if (!b || b.id === 'btnMenu') return;
+    var list = collect(), nm = b.classList.contains('lgx-b') && b.querySelector('span') ? b.querySelector('span').textContent.trim() : null;
+    var it = list.filter(function (i) { return i.btn === b || (nm && i.edit === nm); })[0]; remember(it);
+  }, true);
+
+  window.addEventListener('keydown', function (e) {
+    if (e.target === inp && !box.hidden) {
+      var k = e.key;
+      if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); if (shown.length) { sel = (sel + (k === 'ArrowDown' ? 1 : shown.length - 1)) % shown.length; render(); } }
+      else if (k === 'Tab') { e.preventDefault(); if (shown[sel]) { inp.value = shown[sel].it.label; render(); } }
+      else if (k === 'Enter') { e.preventDefault(); run(shown[sel] && shown[sel].it); }
+      else if (k === ' ') {                              // Space runs a command only when what you typed is exactly a command name or short name
+        var q = inp.value.trim().toLowerCase(), r = shown[sel];
+        if (q && r && (r.it.label.toLowerCase() === q || r.it.aliases.some(function (a) { return a.toLowerCase() === q; }))) { e.preventDefault(); run(r.it); }
+        else if (!q && r) { e.preventDefault(); run(r.it); }
+      }
+      else if (k === 'Escape') { e.preventDefault(); close(); }
+      else if (k === 'Backspace' && !inp.value) { e.preventDefault(); close(); }
+      e.stopPropagation();                               // keep other tools' key handlers out of this
+      return;
+    }
+    if (!box.hidden) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {        // show the tools you used before
+      if (!plainTarget(e.target)) return;
+      e.preventDefault(); e.stopPropagation(); open(''); return;
+    }
+    if (e.key === 'Enter' || e.key === ' ') {                  // run the previous tool again
+      if (!lastId || e.shiftKey || !plainTarget(e.target) || !idle()) return;
+      items = collect(); var again = items.filter(function (i) { return i.id === lastId; })[0];
+      if (again) { e.preventDefault(); e.stopPropagation(); run(again); }
+      return;
+    }
+    if (!/^[a-z]$/i.test(e.key) || blocked(e.target)) return;
+    e.preventDefault(); e.stopPropagation(); open(e.key);
+  }, true);
+  inp.addEventListener('input', function () { sel = 0; render(); });
+  inp.addEventListener('blur', function () { setTimeout(function () { if (document.activeElement !== inp) close(); }, 120); });
+  listEl.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  listEl.addEventListener('mousedown', function (e) { var r = e.target.closest('.cb-i'); if (r && shown[+r.dataset.i]) { e.stopPropagation(); run(shown[+r.dataset.i].it); } });
+  listEl.addEventListener('mousemove', function (e) { var r = e.target.closest('.cb-i'); if (r && +r.dataset.i !== sel) { sel = +r.dataset.i; Array.prototype.forEach.call(listEl.children, function (c, i) { c.classList.toggle('sel', i === sel); }); } });
+
+  /* the box follows the pointer (and stays still while you are pointing at it) */
+  window.addEventListener('pointermove', function (e) {
+    if (!box.hidden) return;                          // box stays where it opened so you can reach and click it
+    mx = e.clientX; my = e.clientY; hasMouse = true;
+  }, true);
+
+  /* one-time tip */
+  setTimeout(function () {
+    if (!document.documentElement.classList.contains('unlocked')) return;
+    var t = document.getElementById('toast'); if (!t || t.className) return;
+    t.textContent = 'Tip: just start typing a command (L, M, TR, DI …) – suggestions appear at your pointer.'; t.className = 'show';
+    setTimeout(function () { if (/^Tip: just start/.test(t.textContent)) t.className = ''; }, 5000);
+  }, 2500);
+})();
+</script>
+
 </body>
 </html>
